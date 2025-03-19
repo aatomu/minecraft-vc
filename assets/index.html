@@ -10,73 +10,89 @@
 </head>
 
 <body>
-  <h1>This Is Index Page</h1>
   <button id="test">Start</button>
 </body>
 <script>
-  console.log("script is running")
+  // Global variables
+  let audioCtx = undefined
   const sampleRate = 44100
-  let scheduled_time = {}
+  const inputBufferTime = 100
+  let buffer = []
+  let users = {}
+
+  // Websocket initialize
+  console.log("Global initialize")
+  const url = new URL(window.location.href)
+  const params = new URLSearchParams(url.searchParams)
+  const id = params.get("id")
+  if (!id) {
+    document.getElementById("test").setAttribute("disabled", "true")
+  }
+
 
   async function NewConnection() {
-    console.log("New websocket")
-    const ws = new WebSocket("./websocket")
+    console.log("Click new connection")
+
+    // Websocket initialize
+    console.log("Websocket initialize")
+    const ws = new WebSocket(`./websocket?id=${id}`)
     ws.binaryType = "arraybuffer"
     let isClosed = false
+    ws.addEventListener("open", () => {
+      setInterval(() => {
+        if (isClosed) return
+
+        ws.send(new Float32Array(buffer))
+        buffer = []
+
+      }, inputBufferTime)
+    })
     ws.addEventListener("message", (e) => {
       if (!e.data) return
-      const arr = e.data
-      const id = new DataView(arr).getUint32(0,true)
-      const pcm = new Float32Array(arr.slice(4))
+      let arr = e.data
+      // ID
+      const idLen = new Uint16Array(arr.slice(0, 2))[0]
+      arr = arr.slice(2)
+      const id = new TextDecoder("utf-8").decode(arr.slice(0, idLen))
+      arr = arr.slice(idLen)
+      // Gain
+      const gain = new Float32Array(arr.slice(0, 4))[0]
+      arr = arr.slice(4)
+      // PCM
+      const pcm = new Float32Array(arr)
+      console.log(`idLen=${idLen}, id=${id}, gain=${gain}`)
+
+      // User Initialize 
+      if (!(id in users)) {
+        console.log(`User(${id}) initialize`)
+        users[id] = {
+          serverGainNode: audioCtx.createGain(),
+          clientGainNode: audioCtx.createGain(),
+          schedule: audioCtx.currentTime,
+        }
+        users[id].serverGainNode.connect(users[id].clientGainNode)
+        users[id].clientGainNode.connect(audioCtx.destination)
+      }
+      users[id].serverGainNode.gain.linearRampToValueAtTime(gain, audioCtx.currentTime + (inputBufferTime / 1000))
+
       playAudioStream(id, pcm)
     })
-    ws.addEventListener("close", (e) => {
+    ws.addEventListener("close", () => {
       isClosed = true
     })
 
-
+    // Audio API initialize
     console.log("Audio API initialize")
-    let initial_delay_sec = 0
-    const audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: sampleRate });
-    const gainNode = audioCtx.createGain()
-    gainNode.gain.value = 2
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: sampleRate });
+    const inputGainNode = audioCtx.createGain()
+    inputGainNode.gain.value = 3
     await audioCtx.audioWorklet.addModule(`./getPcmProcessor.js?t=${new Date()}`)
     const getPcmNode = new AudioWorkletNode(audioCtx, "get-pcm-processor")
     getPcmNode.port.onmessage = (e) => {
       if (isClosed) return
 
-      console.log("Sent PCM")
-      ws.send(e.data)
+      buffer.push(...Array.from(e.data))
     }
-
-
-    function playChunk(audio_src, scheduled_time) {
-      if (audio_src.start) {
-        audio_src.start(scheduled_time);
-      } else {
-        audio_src.noteOn(scheduled_time);
-      }
-    }
-
-    function playAudioStream(id = "sessionID", audio_f32 = new Float32Array()) {
-      var audio_buf = audioCtx.createBuffer(1, audio_f32.length, sampleRate),
-        audio_src = audioCtx.createBufferSource(),
-        current_time = audioCtx.currentTime;
-
-      audio_buf.getChannelData(0).set(audio_f32);
-
-      audio_src.buffer = audio_buf;
-      audio_src.connect(audioCtx.destination);
-
-      if (current_time < scheduled_time[id]) {
-        playChunk(audio_src, scheduled_time[id]);
-        scheduled_time[id] += audio_buf.duration;
-      } else {
-        playChunk(audio_src, current_time);
-        scheduled_time[id] = current_time + audio_buf.duration + initial_delay_sec;
-      }
-    }
-
 
     console.log("Get Voice stream")
     const media = await navigator.mediaDevices.getUserMedia({
@@ -88,10 +104,38 @@
     console.log("Media:", media)
     const track = audioCtx.createMediaStreamSource(media)
     console.log("Track:", track)
-    track.connect(gainNode)
-    gainNode.connect(getPcmNode)
+    track.connect(inputGainNode)
+    inputGainNode.connect(getPcmNode)
     console.log("Connected track => getPcmNode")
   }
 
   document.getElementById("test").addEventListener("click", NewConnection)
+
+
+  function playChunk(audio_src, scheduled_time) {
+    if (audio_src.start) {
+      audio_src.start(scheduled_time);
+    } else {
+      audio_src.noteOn(scheduled_time);
+    }
+  }
+
+  function playAudioStream(id = "id", pcm = new Float32Array()) {
+    const buffer = audioCtx.createBuffer(1, pcm.length, sampleRate)
+    const source = audioCtx.createBufferSource()
+    const currentTime = audioCtx.currentTime;
+
+    buffer.getChannelData(0).set(pcm);
+
+    source.buffer = buffer;
+    source.connect(users[id].serverGainNode);
+
+    if (currentTime < users[id].schedule) {
+      playChunk(source, users[id].schedule);
+      users[id].schedule += buffer.duration;
+    } else {
+      playChunk(source, currentTime);
+      users[id].schedule = currentTime + buffer.duration;
+    }
+  }
 </script>

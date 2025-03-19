@@ -16,9 +16,8 @@ import (
 var (
 	Listen     = ":1031"
 	Root       = "./assets"
-	Users      = map[uint32]*websocket.Conn{}
+	Users      = map[string]*websocket.Conn{}
 	UsersMutex sync.Mutex
-	UsersId    uint32 = 0
 )
 
 func main() {
@@ -59,16 +58,15 @@ func HttpResponse(w http.ResponseWriter, r *http.Request) {
 
 // ウェブソケット処理
 func WebSocketResponse(ws *websocket.Conn) {
-	meId := UsersId
-	UsersId++
-	log.Printf("Websocket connect id=%d, IP=%s", meId, ws.RemoteAddr())
+	meId := ws.Request().URL.Query().Get("id")
+	log.Printf("Websocket connect id=%s, IP=%s", meId, ws.RemoteAddr())
 
 	UsersMutex.Lock()
 	Users[meId] = ws
 	UsersMutex.Unlock()
 
 	defer func() {
-		log.Printf("Websocket disconnect id=%d, IP=%s", meId, ws.RemoteAddr())
+		log.Printf("Websocket disconnect id=%s, IP=%s", meId, ws.RemoteAddr())
 
 		UsersMutex.Lock()
 		delete(Users, meId)
@@ -77,14 +75,24 @@ func WebSocketResponse(ws *websocket.Conn) {
 		ws.Close()
 	}()
 
-	idBinary := make([]byte, 4)
-	binary.LittleEndian.PutUint32(idBinary, meId)
+	header := make([]byte, 0, 4+16)
+	header = binary.LittleEndian.AppendUint16(header, uint16(len(meId)))
+	header = append(header, []byte(meId)...)
+	gainBytes := make([]byte, 4)
+	// idLen+id+raw_pcm
+	var sentMessage []byte
+
 	var err error
 	var message []byte
+	var gain float32 = 1.0
 	for {
 		err = websocket.Message.Receive(ws, &message)
 		if err != nil {
 			return
+		}
+
+		if len(message)%4 == 0 || len(message)/4 < 10 {
+			continue
 		}
 
 		for id, user := range Users {
@@ -93,9 +101,15 @@ func WebSocketResponse(ws *websocket.Conn) {
 				continue
 			}
 
-			err = websocket.Message.Send(user, append(idBinary, message...))
+			// Gain control
+			gain = 10
+			binary.Encode(gainBytes, binary.LittleEndian, gain)
+
+			sentMessage = append(header, gainBytes...)
+			sentMessage = append(sentMessage, message...)
+			err = websocket.Message.Send(user, sentMessage)
 			if err != nil {
-				log.Printf("Websocket err id=%d, location=\"sent message\", err=%s", meId, err)
+				log.Printf("Websocket err id=%s, location=\"sent message\", err=%s", meId, err)
 			}
 		}
 	}
