@@ -12,11 +12,15 @@
 <body>
   <button id="start">Start</button>
   <span id="message"></span>
+  <div id="volume_area">
+
+  </div>
 </body>
 <script>
   // Global variables
   const start = document.getElementById("start")
   const message = document.getElementById("message")
+  const volumeArea = document.getElementById("volume_area")
   let audioCtx = undefined
   const sampleRate = 44100
   const inputBufferTime = 100
@@ -77,6 +81,8 @@
         }
         users[id].serverGainNode.connect(users[id].clientGainNode)
         users[id].clientGainNode.connect(audioCtx.destination)
+
+        newVolume(id)
       }
       users[id].serverGainNode.gain.linearRampToValueAtTime(gain, audioCtx.currentTime + (inputBufferTime / 1000))
 
@@ -134,7 +140,11 @@
     }
   }
 
-  function playAudioStream(id = "id", pcm = new Float32Array()) {
+  /**
+   * @param {string} id
+   * @param {Float32Array} pcm
+   */
+  function playAudioStream(id, pcm) {
     const buffer = audioCtx.createBuffer(1, pcm.length, sampleRate)
     const source = audioCtx.createBufferSource()
     const currentTime = audioCtx.currentTime;
@@ -151,5 +161,66 @@
       playChunk(source, currentTime);
       users[id].schedule = currentTime + buffer.duration;
     }
+  }
+
+  /**
+   * @param {string} id
+   */
+  function newVolume(id) {
+    const group = document.createElement("div")
+
+    const name = document.createElement("span")
+    name.innerText = `${id}:`
+    group.append(name)
+    const volume = document.createElement("input")
+    volume.id = `${id}-input`
+    volume.type = "range"
+    volume.setAttribute("min", "0")
+    volume.setAttribute("max", "5")
+    volume.setAttribute("step", "0.1")
+    volume.value = 1
+    group.append(volume)
+    const volumeValue = document.createElement("span")
+    volumeValue.id = `${id}-value`
+    volumeValue.innerText = `(100%)`
+    group.append(volumeValue)
+
+    volumeArea.append(group)
+
+    volume.addEventListener("input", () => {
+      const value = volume.value
+      updateVolume(id)
+    })
+
+    volume.value = Number(getCookie(id))
+    updateVolume(id)
+  }
+
+  function updateVolume(id) {
+    const value = document.getElementById(`${id}-input`).value
+    console.log(value)
+    users[id].clientGainNode.gain.value = value
+    document.getElementById(`${id}-value`).innerText = `(${Math.floor(value * 100)}%)`
+    setCookie(id, value)
+  }
+
+  /**
+   * @param {string} key
+   * @return {string}
+   */
+  function getCookie(key) {
+    return document.cookie.
+      split("; ").
+      find((row) => row.startsWith(`${key}=`))?.
+      split("=")[1]
+
+  }
+
+  /**
+   * @param {string} key
+   * @param {string} value
+   */
+  function setCookie(key, value) {
+    document.cookie = `${key}=${value}`
   }
 </script>

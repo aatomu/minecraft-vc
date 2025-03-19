@@ -60,7 +60,7 @@ func HttpResponse(w http.ResponseWriter, r *http.Request) {
 func WebSocketResponse(ws *websocket.Conn) {
 	meId := ws.Request().URL.Query().Get("id")
 
-	if _, ok := Users[meId]; ok || true {
+	if _, ok := Users[meId]; ok {
 		log.Printf("Websocket connect cancel id=%s", meId)
 		ws.WriteClose(400)
 		return
