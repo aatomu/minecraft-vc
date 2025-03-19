@@ -91,7 +91,7 @@ func WebSocketResponse(ws *websocket.Conn) {
 			return
 		}
 
-		if len(message)%4 == 0 || len(message)/4 < 10 {
+		if len(message)%4 != 0 || len(message)/4 < 10 {
 			continue
 		}
 
