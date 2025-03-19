@@ -10,10 +10,13 @@
 </head>
 
 <body>
-  <button id="test">Start</button>
+  <button id="start">Start</button>
+  <span id="message"></span>
 </body>
 <script>
   // Global variables
+  const start = document.getElementById("start")
+  const message = document.getElementById("message")
   let audioCtx = undefined
   const sampleRate = 44100
   const inputBufferTime = 100
@@ -26,7 +29,8 @@
   const params = new URLSearchParams(url.searchParams)
   const id = params.get("id")
   if (!id) {
-    document.getElementById("test").setAttribute("disabled", "true")
+    start.setAttribute("disabled", "true")
+    message.innerText = "Required MCID parameter."
   }
 
 
@@ -39,6 +43,7 @@
     ws.binaryType = "arraybuffer"
     let isClosed = false
     ws.addEventListener("open", () => {
+      console.log("Websocket: open")
       setInterval(() => {
         if (isClosed) return
 
@@ -77,7 +82,16 @@
 
       playAudioStream(id, pcm)
     })
-    ws.addEventListener("close", () => {
+    ws.addEventListener("error", (e) => {
+      console.log(`Websocket: error`, e)
+    })
+    ws.addEventListener("close", (e) => {
+      console.log("Websocket: close", e)
+      if (e.code == 400) {
+        message.innerText = "Connection close: multi login is not allowed."
+      } else {
+        message.innerText = `Connection close: ${e.reason}(code:${e.code})`
+      }
       isClosed = true
     })
 
@@ -109,7 +123,7 @@
     console.log("Connected track => getPcmNode")
   }
 
-  document.getElementById("test").addEventListener("click", NewConnection)
+  start.addEventListener("click", NewConnection)
 
 
   function playChunk(audio_src, scheduled_time) {

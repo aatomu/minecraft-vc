@@ -59,6 +59,12 @@ func HttpResponse(w http.ResponseWriter, r *http.Request) {
 // ウェブソケット処理
 func WebSocketResponse(ws *websocket.Conn) {
 	meId := ws.Request().URL.Query().Get("id")
+
+	if _, ok := Users[meId]; ok || true {
+		log.Printf("Websocket connect cancel id=%s", meId)
+		ws.WriteClose(400)
+		return
+	}
 	log.Printf("Websocket connect id=%s, IP=%s", meId, ws.RemoteAddr())
 
 	UsersMutex.Lock()
