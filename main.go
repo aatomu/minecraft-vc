@@ -129,16 +129,11 @@ func main() {
 
 // ページ表示
 func HttpResponse(w http.ResponseWriter, r *http.Request) {
-	log.Println("Access:", r.RemoteAddr, "Path:", r.URL.Path, "File:", filepath.Join(Root, r.URL.Path))
+	path := r.URL.Path
+	log.Println("Access:", r.RemoteAddr, "Path:", path)
 
-	bytes, _ := os.ReadFile(filepath.Join(Root, r.URL.Path))
-	switch filepath.Ext(r.URL.Path) {
-	case "html":
-		w.Header().Set("content-type", "text/html")
-	case ".js":
-		w.Header().Set("content-type", "text/javascript")
-	}
-	w.Write(bytes)
+	filePath := filepath.Join(Root, filepath.Clean(path))
+	http.ServeFile(w, r, filePath)
 }
 
 // ウェブソケット処理
