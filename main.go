@@ -203,8 +203,11 @@ func WebSocketResponse(ws *websocket.Conn) {
 	go func() {
 		ticker := time.NewTicker(time.Duration(PosUpdateInterval) * time.Millisecond)
 		gainBytes := make([]byte, 4)
-		for !isClose {
+		for {
 			<-ticker.C
+			if isClose {
+				break
+			}
 			for id, user := range Users {
 				if id == meId {
 					continue
