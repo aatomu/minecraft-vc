@@ -156,8 +156,6 @@ async function NewConnection() {
   users = {}
   // @ts-expect-error
   audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: sampleRate });
-  const inputGainNode = audioCtx.createGain()
-  inputGainNode.gain.value = 5
   await audioCtx.audioWorklet.addModule(`./getPcmProcessor.js?t=${new Date()}`)
   const getPcmNode = new AudioWorkletNode(audioCtx, "get-pcm-processor")
   getPcmNode.port.onmessage = (e) => {
@@ -176,8 +174,7 @@ async function NewConnection() {
   console.log("Media:", media)
   const track = audioCtx.createMediaStreamSource(media)
   console.log("Track:", track)
-  track.connect(inputGainNode)
-  inputGainNode.connect(getPcmNode)
+  track.connect(getPcmNode)
   console.log("Connected track => getPcmNode")
 }
 
@@ -222,8 +219,8 @@ function newVolume(id) {
   volume.classList.add("volume-input")
   volume.type = "range"
   volume.setAttribute("min", "0")
-  volume.setAttribute("max", "2")
-  volume.setAttribute("step", "0.1")
+  volume.setAttribute("max", "1")
+  volume.setAttribute("step", "0.01")
   volume.value = "1"
   group.append(volume)
 
@@ -276,7 +273,7 @@ function updateVolume(id) {
   const volumeValue = document.getElementById(`${id}-value`)
   volumeValue.innerText = `(${Math.floor(value * 100).toString().padStart(3, "0")}%)`
 
-  users[id].clientGainNode.gain.value = value
+  users[id].clientGainNode.gain.value = value * 30
   setCookie(id, String(value))
 }
 
