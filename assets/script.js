@@ -98,6 +98,11 @@ async function NewConnection() {
         document.getElementById(`${id}-group`)?.remove()
         break
       }
+      case 0x03: { // opMessage
+        const message = new TextDecoder("utf-8").decode(arr)
+        console.log(`Server control: message id=${id} value=${message}`)
+        updateMessage(message)
+      }
     }
   })
   ws.addEventListener("error", (e) => {
@@ -105,10 +110,8 @@ async function NewConnection() {
   })
   ws.addEventListener("close", (e) => {
     console.log("Websocket: close", e)
-    if (e.code == 400) {
-      updateMessage("Connection close: multi login is not allowed.")
-    } else {
-      updateMessage(`Connection close: closed by server. (code:${e.code})`)
+    if (e.code != 1000) {
+      updateMessage(`Connection close: code=${e.code}`)
     }
     isClosed = true
   })

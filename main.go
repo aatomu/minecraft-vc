@@ -37,6 +37,7 @@ var (
 type User struct {
 	Conn      *websocket.Conn
 	Header    []byte
+	isExist   bool
 	Pos       [3]float64
 	Dimension string
 }
@@ -47,19 +48,20 @@ const (
 	opPCM opCode = iota
 	opGain
 	opDelete
+	opMessage
 )
 
 func main() {
-	flag.Parse()
-	// 移動
 	_, file, _, _ := runtime.Caller(0)
 	goDir := filepath.Dir(file) + "/"
 	os.Chdir(goDir)
 
-	// アクセス先
+	flag.Parse()
+
+	// Http request handler
 	http.HandleFunc("/", HttpResponse)
 	http.Handle("/websocket", websocket.Handler(WebSocketResponse))
-	// Web鯖 起動
+	// Boot http server
 	go func() {
 		log.Println("Http Server Boot")
 		err := http.ListenAndServe(Listen, nil)
@@ -68,14 +70,16 @@ func main() {
 			return
 		}
 	}()
-	// Rcon 接続を確立
+	// Rcon connection to server
 	go func() {
 		retry := 0
 
 		ticker := time.NewTicker(time.Duration(PosUpdateInterval) * time.Millisecond)
 
+		// user data cache
 		posRegexp := regexp.MustCompile(`(-?[0-9]+\.[0-9]+)d`)
-		pos := [3]float64{}
+		pos := [3]float64{0, 0, 0}
+		var isExist bool
 
 		for {
 			time.Sleep(time.Duration(retry) * time.Second)
@@ -94,6 +98,14 @@ func main() {
 			for shouldUpdate {
 				<-ticker.C
 				for id, user := range Users {
+					// is exist player
+					result, err := r.SendCommand(fmt.Sprintf("execute if entity %s", id))
+					if err != nil {
+						shouldUpdate = false
+						break
+					}
+					isExist = strings.Contains(string(result.Body), "1")
+
 					// get Pos
 					for i := 0; i < 3; i++ {
 						result, err := r.SendCommand(fmt.Sprintf("data get entity %s Pos[%d]", id, i))
@@ -109,7 +121,7 @@ func main() {
 						fmt.Sscanf(string(match[0][1]), "%f", &pos[i])
 					}
 					// get Dimension
-					result, err := r.SendCommand(fmt.Sprintf("data get entity %s Dimension", id))
+					result, err = r.SendCommand(fmt.Sprintf("data get entity %s Dimension", id))
 					if err != nil {
 						shouldUpdate = false
 						break
@@ -117,6 +129,7 @@ func main() {
 					dimension := strings.Split(string(result.Body), " ")
 
 					UsersMutex.Lock()
+					user.isExist = isExist
 					user.Pos = pos
 					user.Dimension = dimension[len(dimension)-1]
 					UsersMutex.Unlock()
@@ -140,18 +153,19 @@ func HttpResponse(w http.ResponseWriter, r *http.Request) {
 func WebSocketResponse(ws *websocket.Conn) {
 	meId := ws.Request().URL.Query().Get("id")
 
+	header := make([]byte, 0, 4+16)
+	header = binary.LittleEndian.AppendUint16(header, uint16(len(meId)))
+	header = append(header, []byte(meId)...)
+
 	if _, ok := Users[meId]; ok {
 		log.Printf("Websocket connect cancel id=%s, because=\"Multi login not allowed.\"", meId)
-		ws.WriteClose(400)
+		websocket.Message.Send(ws, packetBuilder(opMessage, header, []byte("Connection cancel: multi login is not allowed.")))
+		ws.Close()
 		return
 	}
 
 	log.Printf("Websocket connect id=%s, IP=%s", meId, ws.RemoteAddr())
 	isClose := false
-
-	header := make([]byte, 0, 4+16)
-	header = binary.LittleEndian.AppendUint16(header, uint16(len(meId)))
-	header = append(header, []byte(meId)...)
 
 	me := &User{
 		Conn:   ws,
@@ -197,7 +211,7 @@ func WebSocketResponse(ws *websocket.Conn) {
 				}
 
 				var gain float64 = 0.0
-				if user.Dimension == me.Dimension {
+				if user.Dimension == me.Dimension && me.isExist {
 					x := (user.Pos[0] - me.Pos[0]) * (user.Pos[0] - me.Pos[0])
 					y := (user.Pos[1] - me.Pos[1]) * (user.Pos[1] - me.Pos[1])
 					z := (user.Pos[2] - me.Pos[2]) * (user.Pos[2] - me.Pos[2])
