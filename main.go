@@ -32,6 +32,7 @@ var (
 	Users       = map[string]*User{}
 	UsersMutex  sync.Mutex
 	RconAddress = flag.String("address", "", "")
+	RconPass    = flag.String("pass", "", "")
 )
 
 type User struct {
@@ -84,7 +85,7 @@ func main() {
 		for {
 			time.Sleep(time.Duration(retry) * time.Second)
 			log.Printf("Rcon connecting retry=%d", retry)
-			r, err := rcon.Login(*RconAddress, "00128")
+			r, err := rcon.Login(*RconAddress, *RconPass)
 			if err != nil {
 				log.Printf("Rcon connect err because=\"%s\"", err)
 				retry++
