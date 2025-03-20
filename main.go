@@ -20,19 +20,19 @@ import (
 	"golang.org/x/net/websocket"
 )
 
-const (
-	Listen            string  = ":1031"
-	Root              string  = "./assets"
-	PosUpdateInterval int     = 1000
-	DistanceFadeout   float64 = 10
-	DistanceMute      float64 = 20
-)
-
 var (
-	Users       = map[string]*User{}
-	UsersMutex  sync.Mutex
-	RconAddress = flag.String("address", "", "")
-	RconPass    = flag.String("pass", "", "")
+	// Flags
+	Listen            = flag.String("listen", "1031", "http server listen port")
+	RconAddress       = flag.String("address", "localhost:25575", "minecraft rcon listening port")
+	RconPass          = flag.String("pass", "0000", "minecraft rcon login password")
+	PosUpdateInterval = flag.Int("update", 1000, "check player position interval")
+	DistanceFadeout   = flag.Float64("fadeout", 3.0, "Voice fadeout distance in minecraft")
+	DistanceMute      = flag.Float64("mute", 15.0, "Voice mute distance in minecraft")
+
+	// Resource
+	Root       string = "./assets"
+	Users             = map[string]*User{}
+	UsersMutex sync.Mutex
 )
 
 type User struct {
@@ -65,7 +65,7 @@ func main() {
 	// Boot http server
 	go func() {
 		log.Println("Http Server Boot")
-		err := http.ListenAndServe(Listen, nil)
+		err := http.ListenAndServe(":"+*Listen, nil)
 		if err != nil {
 			log.Println("Failed Listen:", err)
 			return
@@ -75,7 +75,7 @@ func main() {
 	go func() {
 		retry := 0
 
-		ticker := time.NewTicker(time.Duration(PosUpdateInterval) * time.Millisecond)
+		ticker := time.NewTicker(time.Duration(*PosUpdateInterval) * time.Millisecond)
 
 		// user data cache
 		posRegexp := regexp.MustCompile(`(-?[0-9]+\.[0-9]+)d`)
@@ -202,7 +202,7 @@ func WebSocketResponse(ws *websocket.Conn) {
 
 	// Update Gain
 	go func() {
-		ticker := time.NewTicker(time.Duration(PosUpdateInterval) * time.Millisecond)
+		ticker := time.NewTicker(time.Duration(*PosUpdateInterval) * time.Millisecond)
 		gainBytes := make([]byte, 4)
 		for {
 			<-ticker.C
@@ -221,11 +221,11 @@ func WebSocketResponse(ws *websocket.Conn) {
 					z := (user.Pos[2] - me.Pos[2]) * (user.Pos[2] - me.Pos[2])
 					d := math.Sqrt(x + y + z)
 
-					if d <= DistanceFadeout {
+					if d <= *DistanceFadeout {
 						gain = 1
-					} else if d <= DistanceMute {
-						d = d - DistanceFadeout
-						distanceRange := DistanceMute - DistanceFadeout
+					} else if d <= *DistanceMute {
+						d = d - *DistanceFadeout
+						distanceRange := *DistanceMute - *DistanceFadeout
 						gain = 1 - (d / distanceRange)
 
 						if gain < 0 {
