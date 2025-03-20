@@ -3,7 +3,12 @@
 // Global variables
 /** @type {HTMLInputElement} */
 // @ts-expect-error
-const start = document.getElementById("start")
+const button = document.getElementById("button")
+/** @type {HTMLInputElement} */
+// @ts-expect-error
+const buttonMessage = document.getElementById("button")
+let buttonState = 0
+let isMute = false
 /** @type {HTMLDivElement} */
 // @ts-expect-error
 const volumes = document.getElementById("volumes")
@@ -29,14 +34,41 @@ const url = new URL(window.location.href)
 const params = new URLSearchParams(url.searchParams)
 const id = params.get("id")
 if (!id) {
-  start.setAttribute("disabled", "true")
+  updateButton(true, "Please reload", "")
   updateMessage("Error: required MCID parameter.")
 }
 
+button.addEventListener("click", clickButton)
+
+function clickButton() {
+  console.log(`Click button: state=${buttonState}`)
+  switch (buttonState) {
+    case 0: {
+      NewConnection()
+      isMute = false
+
+      updateButton(false, "Mic to mute", "green")
+      buttonState = 1
+      break
+    }
+    case 1: {
+      isMute = true
+
+      updateButton(false, "Mic to unmute", "red")
+      buttonState = 2
+      break
+    }
+    case 2: {
+      isMute = false
+
+      updateButton(false, "Mic to mute", "green")
+      buttonState = 1
+      break
+    }
+  }
+}
 
 async function NewConnection() {
-  console.log("Click new connection")
-
   // Websocket initialize
   console.log("Websocket initialize")
   const ws = new WebSocket(`./websocket?id=${id}`)
@@ -49,7 +81,9 @@ async function NewConnection() {
     setInterval(() => {
       if (isClosed) return
 
-      ws.send(new Float32Array(buffer))
+      if (!isMute) {
+        ws.send(new Float32Array(buffer))
+      }
       buffer = []
 
     }, inputBufferTime)
@@ -113,6 +147,7 @@ async function NewConnection() {
     if (e.code != 1000) {
       updateMessage(`Connection close: code=${e.code}`)
     }
+    audioCtx.close()
     isClosed = true
   })
 
@@ -122,7 +157,7 @@ async function NewConnection() {
   // @ts-expect-error
   audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: sampleRate });
   const inputGainNode = audioCtx.createGain()
-  inputGainNode.gain.value = 3
+  inputGainNode.gain.value = 5
   await audioCtx.audioWorklet.addModule(`./getPcmProcessor.js?t=${new Date()}`)
   const getPcmNode = new AudioWorkletNode(audioCtx, "get-pcm-processor")
   getPcmNode.port.onmessage = (e) => {
@@ -145,8 +180,6 @@ async function NewConnection() {
   inputGainNode.connect(getPcmNode)
   console.log("Connected track => getPcmNode")
 }
-
-start.addEventListener("click", NewConnection)
 
 /**
  * @param {string} id
@@ -276,4 +309,45 @@ function updateMessage(text) {
   const message = document.getElementById("message")
 
   message.innerText = text
+}
+
+/**
+ * @param {boolean} isDisable
+ * @param {string} text
+ * @param {""|"green"|"red"} color
+ */
+function updateButton(isDisable, text, color) {
+  if (isDisable) {
+    button.setAttribute("disabled", "true")
+    button.classList.add("button-disable")
+  } else {
+    button.removeAttribute("disabled")
+    button.classList.remove("button-disable")
+  }
+
+  /** @type {HTMLSpanElement} */
+  // @ts-expect-error
+  const buttonMessage = document.getElementById("button-message")
+  buttonMessage.innerText = text
+
+  switch (color) {
+    case "green": {
+      buttonMessage.classList.add("button-green")
+      buttonMessage.classList.remove("button-red")
+      buttonMessage.classList.remove("button-disable")
+      break
+    }
+    case "red": {
+      buttonMessage.classList.add("button-red")
+      buttonMessage.classList.remove("button-green")
+      buttonMessage.classList.remove("button-disable")
+      break
+    }
+    default: {
+      buttonMessage.classList.remove("button-green")
+      buttonMessage.classList.remove("button-red")
+      buttonMessage.classList.remove("button-disable")
+      break
+    }
+  }
 }

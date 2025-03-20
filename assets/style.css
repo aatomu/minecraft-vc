@@ -24,15 +24,32 @@ body {
   margin-top: 1lh;
 }
 
-.connect {
-  padding: 0.5lh 5lh;
+.button {
+  height: 2.5lh;
+  width: 25em;
+
   background-color: white;
   border-radius: 5px;
+  border-width: 2px;
+  border-style: solid;
 
   display: flex;
   flex-direction: column;
   flex-wrap: nowrap;
+  justify-content: center;
   align-items: center;
+}
+
+.button:has(.button-disable) {
+  opacity: 0.5;
+}
+
+.button:has(.button-green) {
+  border-color: greenyellow;
+}
+
+.button:has(.button-red) {
+  border-color: coral;
 }
 
 .users {
