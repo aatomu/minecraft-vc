@@ -59,17 +59,14 @@
     ws.addEventListener("message", (e) => {
       if (!e.data) return
       let arr = e.data
+      // OpCode
+      const opCode = new Uint8Array(arr.slice(0, 1))[0]
+      arr = arr.slice(1)
       // ID
       const idLen = new Uint16Array(arr.slice(0, 2))[0]
       arr = arr.slice(2)
       const id = new TextDecoder("utf-8").decode(arr.slice(0, idLen))
       arr = arr.slice(idLen)
-      // Gain
-      const gain = new Float32Array(arr.slice(0, 4))[0]
-      arr = arr.slice(4)
-      // PCM
-      const pcm = new Float32Array(arr)
-      console.log(`idLen=${idLen}, id=${id}, gain=${gain}`)
 
       // User Initialize 
       if (!(id in users)) {
@@ -79,14 +76,29 @@
           clientGainNode: audioCtx.createGain(),
           schedule: audioCtx.currentTime,
         }
+        users[id].serverGainNode.gain.value = 0
         users[id].serverGainNode.connect(users[id].clientGainNode)
         users[id].clientGainNode.connect(audioCtx.destination)
 
         newVolume(id)
       }
-      users[id].serverGainNode.gain.linearRampToValueAtTime(gain, audioCtx.currentTime + (inputBufferTime / 1000))
 
-      playAudioStream(id, pcm)
+      switch (opCode) {
+        case 0x00: { // opPCM
+          playAudioStream(id, new Float32Array(arr))
+          break
+        }
+        case 0x01: { // opGain
+          const gain = new Float32Array(arr)[0]
+          users[id].serverGainNode.gain.linearRampToValueAtTime(gain, audioCtx.currentTime + 1.000)
+          break
+        }
+        case 0x02: { // opDelete
+          delete users[id]
+          document.getElementById(`${id}-group`).remove()
+          break
+        }
+      }
     })
     ws.addEventListener("error", (e) => {
       console.log(`Websocket: error`, e)
@@ -168,6 +180,7 @@
    */
   function newVolume(id) {
     const group = document.createElement("div")
+    group.id = `${id}-group`
 
     const name = document.createElement("span")
     name.innerText = `${id}:`
@@ -198,7 +211,6 @@
 
   function updateVolume(id) {
     const value = document.getElementById(`${id}-input`).value
-    console.log(value)
     users[id].clientGainNode.gain.value = value
     document.getElementById(`${id}-value`).innerText = `(${Math.floor(value * 100)}%)`
     setCookie(id, value)

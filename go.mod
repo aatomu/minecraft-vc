@@ -9,6 +9,7 @@ replace github.com/aatomu/aatomlib/disgord => ../aatomlib/disgord
 replace github.com/aatomu/aatomlib/utils => ../aatomlib/utils
 
 require (
+	github.com/aatomu/aatomlib/rcon v0.0.0-20240219230240-dac1f72ebc71
 	github.com/aatomu/aatomlib/utils v0.0.0-00010101000000-000000000000
 	golang.org/x/net v0.19.0
 )
