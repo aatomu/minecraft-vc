@@ -4,7 +4,23 @@
 
 ## 使い方
 
-`go run main.go -address="localhost:25575" -pass="0000"`
+### サーバーの起動
+
+以下を実行して、サーバーを起動します。
+
+```sh
+go run main.go -address="localhost:25575" -pass="0000"
+```
+
+### クライアントのアクセス
+
+ブラウザで以下の URL を開きます。
+
+```sh
+http://example.com/?id=<MCID>
+```
+
+※ `<MCID>` を自分の Minecraft ID に置き換えてください。
 
 # 引数/コンフィグ
 

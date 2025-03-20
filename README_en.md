@@ -4,7 +4,23 @@ A reproduction of SimpleVoiceChat that requires no installation
 
 ## How to use
 
-`go run main.go -address="localhost:25575" -pass="0000"`
+### Starting the Server
+
+Run the following command to start the server:
+
+```sh
+go run main.go -address="localhost:25575" -pass="0000"
+```
+
+### Accessing the Client
+
+Open the following URL in your browser:
+
+```sh
+http://example.com/?id=<MCID>
+```
+
+※ Replace <MCID> with your own Minecraft ID.
 
 # Argument/Configuration
 
