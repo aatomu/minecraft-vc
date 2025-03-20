@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -20,9 +21,11 @@ import (
 )
 
 const (
-	Listen            = ":1031"
-	Root              = "./assets"
-	PosUpdateInterval = 1000
+	Listen            string  = ":1031"
+	Root              string  = "./assets"
+	PosUpdateInterval int     = 1000
+	DistanceFadeout   float64 = 10
+	DistanceMute      float64 = 20
 )
 
 var (
@@ -32,9 +35,10 @@ var (
 )
 
 type User struct {
-	Conn   *websocket.Conn
-	Header []byte
-	Pos    [3]float64
+	Conn      *websocket.Conn
+	Header    []byte
+	Pos       [3]float64
+	Dimension string
 }
 
 type opCode uint8
@@ -66,10 +70,13 @@ func main() {
 	}()
 	// Rcon 接続を確立
 	go func() {
-		ticker := time.NewTicker(time.Duration(PosUpdateInterval) * time.Millisecond)
 		retry := 0
+
+		ticker := time.NewTicker(time.Duration(PosUpdateInterval) * time.Millisecond)
+
 		posRegexp := regexp.MustCompile(`(-?[0-9]+\.[0-9]+)d`)
 		pos := [3]float64{}
+
 		for {
 			time.Sleep(time.Duration(retry) * time.Second)
 			log.Printf("Rcon connecting retry=%d", retry)
@@ -87,6 +94,7 @@ func main() {
 			for shouldUpdate {
 				<-ticker.C
 				for id, user := range Users {
+					// get Pos
 					for i := 0; i < 3; i++ {
 						result, err := r.SendCommand(fmt.Sprintf("data get entity %s Pos[%d]", id, i))
 						if err != nil {
@@ -100,9 +108,17 @@ func main() {
 
 						fmt.Sscanf(string(match[0][1]), "%f", &pos[i])
 					}
+					// get Dimension
+					result, err := r.SendCommand(fmt.Sprintf("data get entity %s Dimension", id))
+					if err != nil {
+						shouldUpdate = false
+						break
+					}
+					dimension := strings.Split(string(result.Body), " ")
 
 					UsersMutex.Lock()
 					user.Pos = pos
+					user.Dimension = dimension[len(dimension)-1]
 					UsersMutex.Unlock()
 				}
 			}
@@ -181,19 +197,30 @@ func WebSocketResponse(ws *websocket.Conn) {
 		gainBytes := make([]byte, 4)
 		for !isClose {
 			<-ticker.C
-			log.Println(me.Pos)
 			for id, user := range Users {
-				if id == meId && false {
-					// if id == meId {
+				if id == meId {
 					continue
 				}
 
-				x := (user.Pos[0] - me.Pos[0]) * (user.Pos[0] - me.Pos[0])
-				y := (user.Pos[1] - me.Pos[1]) * (user.Pos[1] - me.Pos[1])
-				z := (user.Pos[2] - me.Pos[2]) * (user.Pos[2] - me.Pos[2])
-				d := math.Sqrt(x + y + z)
+				var gain float64 = 0.0
+				if user.Dimension == me.Dimension {
+					x := (user.Pos[0] - me.Pos[0]) * (user.Pos[0] - me.Pos[0])
+					y := (user.Pos[1] - me.Pos[1]) * (user.Pos[1] - me.Pos[1])
+					z := (user.Pos[2] - me.Pos[2]) * (user.Pos[2] - me.Pos[2])
+					d := math.Sqrt(x + y + z)
 
-				gain := 1 - (d * 0.1)
+					if d <= DistanceFadeout {
+						gain = 1
+					} else if d <= DistanceMute {
+						d = d - DistanceFadeout
+						distanceRange := DistanceMute - DistanceFadeout
+						gain = 1 - (d / distanceRange)
+
+						if gain < 0 {
+							gain = 0
+						}
+					}
+				}
 				binary.Encode(gainBytes, binary.LittleEndian, float32(gain))
 
 				err := websocket.Message.Send(user.Conn, packetBuilder(opGain, me.Header, gainBytes))
