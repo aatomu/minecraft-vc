@@ -1,0 +1,80 @@
+body {
+  margin: 0;
+  min-height: 100vh;
+
+  background-color: lightgray;
+
+  display: flex;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  justify-content: center;
+  align-items: center;
+}
+
+.container {
+  display: flex;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  justify-content: center;
+  align-items: center;
+
+}
+
+.container>* {
+  margin-top: 1lh;
+}
+
+.connect {
+  padding: 0.5lh 5lh;
+  background-color: white;
+  border-radius: 5px;
+
+  display: flex;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: center;
+}
+
+.users {
+  height: 40vh;
+  width: 30em;
+
+  background-color: white;
+  border-radius: 5px;
+  border-color: gray;
+  border-width: 3px;
+  border-style: solid;
+
+  display: flex;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  justify-content: flex-start;
+  align-items: center;
+
+  overflow-y: auto;
+}
+
+.users>* {
+  margin-top: 0.1lh;
+}
+
+.volume-group {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+}
+
+.volume-input {
+  height: 0.3rem;
+
+  background-color: lightgrey;
+  border-radius: 0.15rem;
+
+  appearance: none;
+}
+
+.volume-value {
+  font-size: 90%;
+  color: gray;
+}

@@ -4,9 +4,6 @@
 /** @type {HTMLInputElement} */
 // @ts-expect-error
 const start = document.getElementById("start")
-/** @type {HTMLSpanElement} */
-// @ts-expect-error
-const message = document.getElementById("message")
 /** @type {HTMLDivElement} */
 // @ts-expect-error
 const volumeArea = document.getElementById("volume_area")
@@ -33,7 +30,7 @@ const params = new URLSearchParams(url.searchParams)
 const id = params.get("id")
 if (!id) {
   start.setAttribute("disabled", "true")
-  message.innerText = "Required MCID parameter."
+  updateMessage("Error: required MCID parameter.")
 }
 
 
@@ -47,6 +44,8 @@ async function NewConnection() {
   let isClosed = false
   ws.addEventListener("open", () => {
     console.log("Websocket: open")
+    updateMessage("connected to server")
+
     setInterval(() => {
       if (isClosed) return
 
@@ -107,9 +106,9 @@ async function NewConnection() {
   ws.addEventListener("close", (e) => {
     console.log("Websocket: close", e)
     if (e.code == 400) {
-      message.innerText = "Connection close: multi login is not allowed."
+      updateMessage("Connection close: multi login is not allowed.")
     } else {
-      message.innerText = `Connection close: ${e.reason}(code:${e.code})`
+      updateMessage(`Connection close: closed by server. (code:${e.code})`)
     }
     isClosed = true
   })
@@ -175,24 +174,29 @@ function playAudioStream(id, pcm) {
 function newVolume(id) {
   const group = document.createElement("div")
   group.id = `${id}-group`
+  group.classList.add("volume-group")
 
-  const name = document.createElement("span")
+  const name = document.createElement("div")
   name.innerText = `${id}:`
   group.append(name)
+
   const volume = document.createElement("input")
   volume.id = `${id}-input`
+  volume.classList.add("volume-input")
   volume.type = "range"
   volume.setAttribute("min", "0")
-  volume.setAttribute("max", "5")
+  volume.setAttribute("max", "2")
   volume.setAttribute("step", "0.1")
   volume.value = "1"
   group.append(volume)
-  const volumeValue = document.createElement("span")
+
+  const volumeValue = document.createElement("div")
   volumeValue.id = `${id}-value`
+  volumeValue.classList.add("volume-value")
   volumeValue.innerText = `(100%)`
   group.append(volumeValue)
 
-  volumeArea?.append(group)
+  volumeArea.append(group)
 
   volume.addEventListener("input", () => {
     const value = volume.value
@@ -238,4 +242,15 @@ function getCookie(key) {
  */
 function setCookie(key, value) {
   document.cookie = `${key}=${value}`
+}
+
+/**
+ * @param {string} text
+ */
+function updateMessage(text) {
+  /** @type {HTMLSpanElement} */
+  // @ts-expect-error
+  const message = document.getElementById("message")
+
+  message.innerText = text
 }

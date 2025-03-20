@@ -1,19 +1,23 @@
 <!DOCTYPE html>
 
 <head>
-  <title>Title</title>
-  <style>
-    .body {
-      text-align: center;
-    }
-  </style>
+  <title>Minecraft VC</title>
+  <link rel="stylesheet" href="style.css" type="text/css">
 </head>
 
 <body>
-  <button id="start">Start</button>
-  <span id="message"></span>
-  <div id="volume_area">
+  <div class="container">
 
+    <h1>Minecraft VC</h1>
+    <div class="connect">
+      <label>
+        <span>Voice Chatに接続</span>
+        <button style="display:none;" id="start"></button>
+      </label>
+    </div>
+    <span>ステータス:<span id="message"></span></span>
+    <div id="volume_area" class="users">
+    </div>
   </div>
 </body>
 
