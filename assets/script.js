@@ -6,7 +6,7 @@
 const start = document.getElementById("start")
 /** @type {HTMLDivElement} */
 // @ts-expect-error
-const volumeArea = document.getElementById("volume_area")
+const volumes = document.getElementById("volumes")
 /** @type {AudioContext} */
 // @ts-expect-error
 let audioCtx = undefined
@@ -177,6 +177,7 @@ function newVolume(id) {
   group.classList.add("volume-group")
 
   const name = document.createElement("div")
+  name.classList.add("volume-name")
   name.innerText = `${id}:`
   group.append(name)
 
@@ -196,7 +197,26 @@ function newVolume(id) {
   volumeValue.innerText = `(100%)`
   group.append(volumeValue)
 
-  volumeArea.append(group)
+  if (volumes.children.length > 0) {
+    let isPlaced = false
+    for (let i = 0; i < volumes.children.length; i++) {
+      /** @type {HTMLSpanElement} */
+      //@ts-expect-error
+      const childrenName = volumes.children[i].querySelector(".volume-name")
+      volumes.children[0].querySelector(".volume-name")
+
+      if (id.localeCompare(childrenName.innerText) < 0) {
+        volumes.children[i].before(group)
+        isPlaced = true
+        break
+      }
+    }
+    if (!isPlaced) {
+      volumes.append(group)
+    }
+  } else {
+    volumes.append(group)
+  }
 
   volume.addEventListener("input", () => {
     const value = volume.value
@@ -218,7 +238,7 @@ function updateVolume(id) {
   /** @type {HTMLSpanElement} */
   // @ts-expect-error
   const volumeValue = document.getElementById(`${id}-value`)
-  volumeValue.innerText = `(${Math.floor(value * 100)}%)`
+  volumeValue.innerText = `(${Math.floor(value * 100).toString().padStart(3, "0")}%)`
 
   users[id].clientGainNode.gain.value = value
   setCookie(id, String(value))
