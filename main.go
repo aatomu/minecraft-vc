@@ -200,7 +200,7 @@ func WebSocketResponse(ws *websocket.Conn) {
 		ws.Close()
 	}()
 
-	// Update Gain
+	// Gain control
 	go func() {
 		ticker := time.NewTicker(time.Duration(*PosUpdateInterval) * time.Millisecond)
 		gainBytes := make([]byte, 4)
@@ -210,12 +210,12 @@ func WebSocketResponse(ws *websocket.Conn) {
 				break
 			}
 			for id, user := range Users {
-				if id == meId {
+				if id == meId || !me.isExist {
 					continue
 				}
 
 				var gain float64 = 0.0
-				if user.Dimension == me.Dimension && me.isExist {
+				if user.Dimension == me.Dimension {
 					x := (user.Pos[0] - me.Pos[0]) * (user.Pos[0] - me.Pos[0])
 					y := (user.Pos[1] - me.Pos[1]) * (user.Pos[1] - me.Pos[1])
 					z := (user.Pos[2] - me.Pos[2]) * (user.Pos[2] - me.Pos[2])
@@ -252,13 +252,13 @@ func WebSocketResponse(ws *websocket.Conn) {
 			return
 		}
 
-		if len(message)%4 != 0 || len(message)/4 < 10 {
+		if len(message)%4 != 0 || len(message)/4 < 10 || !me.isExist {
 			continue
 		}
 
 		packet := packetBuilder(opPCM, me.Header, message)
 		for id, user := range Users {
-			if id == meId {
+			if id == meId || !user.isExist {
 				continue
 			}
 
