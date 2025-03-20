@@ -24,20 +24,13 @@ http://example.com/?id=<MCID>
 
 # 引数/コンフィグ
 
-- `listen=1031`
-  - Listen port \
-    クライアントのアクセス先
-- \*`address="localhost:25575"`
-  - Minecraft の Rcon アドレス
-- \*`pass="0000"`
-  - Minecraft の Rcon パスワード
-- `update=1000`
-  - Minecraft 内でプレイヤーの位置を確認する間隔 (millisecond) \
-    大きい値にすると音量への反映が遅くなる
-- `fadeout=3.0`
-  - 音量が小さくなり始める距離
-- `mute=15.0`
-  - 音量が 0 になる距離
+| Required | Flag Name | Description                       | Default           |
+| :------: | :-------- | :-------------------------------- | :---------------- |
+|    No    | `listen`  | クライアントがアクセスするポート  | `1031`            |
+|   Yes    | `address` | Minecraft の Rcon アドレス        | `localhost:25575` |
+|   Yes    | `pass`    | Minecraft の Rcon パスワード      | `0000`            |
+|    No    | `update`  | プレイヤー位置の確認間隔 (ミリ秒) | `1000`            |
+|    No    | `fadeout` | 音量が小さくなり始める距離        | `3.0`             |
+|    No    | `mute`    | 音量が 0 になる距離               | `15.0`            |
 
-初期値は `=` の後に書かれています
-`*`から始まる引数は設定が必要です
+> `update`の値を小さくすると音量への反映が早くなりますが、Minecraft サーバーやクライアントが重く可能性があります
