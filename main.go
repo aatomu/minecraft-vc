@@ -178,7 +178,7 @@ func WebSocketResponse(ws *websocket.Conn) {
 
 	defer func() {
 		log.Printf("Websocket disconnect id=%s, IP=%s", meId, ws.RemoteAddr())
-		packet := packetBuilder(opPCM, me.Header, []byte{})
+		packet := packetBuilder(opDelete, me.Header, []byte{})
 		for id, user := range Users {
 			if id == meId {
 				continue
