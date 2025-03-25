@@ -23,17 +23,27 @@ import (
 var (
 	// Flags
 	Listen            = flag.String("listen", "1031", "http server listen port")
-	RconAddress       = flag.String("address", "localhost:25575", "minecraft rcon listening port")
-	RconPass          = flag.String("pass", "0000", "minecraft rcon login password")
 	PosUpdateInterval = flag.Int("update", 1000, "check player position interval")
-	DistanceFadeout   = flag.Float64("fadeout", 3.0, "Voice fadeout distance in minecraft")
-	DistanceMute      = flag.Float64("mute", 15.0, "Voice mute distance in minecraft")
-
 	// Resource
-	Root       string = "./assets"
-	Users             = map[string]*User{}
-	UsersMutex sync.Mutex
+	Root      string = "./assets"
+	servers          = map[string]*Server{}
+	serversMu sync.Mutex
+	Debug     = true
 )
+
+type Server struct {
+	// User
+	users   map[string]*User
+	usersMu sync.Mutex
+	// Rcon
+	address string
+	pass    string
+	rcon    *rcon.Rcon
+	retry   int
+	// Volume
+	fadeout float64
+	mute    float64
+}
 
 type User struct {
 	Conn      *websocket.Conn
@@ -59,6 +69,13 @@ func main() {
 
 	flag.Parse()
 
+	servers["test"] = &Server{
+		users:   map[string]*User{},
+		address: "localhost:25575",
+		pass:    "0000",
+		fadeout: 3.0,
+		mute:    15.0,
+	}
 	// Http request handler
 	http.HandleFunc("/", HttpResponse)
 	http.Handle("/websocket", websocket.Handler(WebSocketResponse))
@@ -71,70 +88,30 @@ func main() {
 			return
 		}
 	}()
-	// Rcon connection to server
-	go func() {
-		retry := 0
 
+	go func() {
 		ticker := time.NewTicker(time.Duration(*PosUpdateInterval) * time.Millisecond)
 
-		// user data cache
-		posRegexp := regexp.MustCompile(`(-?[0-9]+\.[0-9]+)d`)
-		pos := [3]float64{0, 0, 0}
-		var isExist bool
-
 		for {
-			time.Sleep(time.Duration(retry) * time.Second)
-			log.Printf("Rcon connecting retry=%d", retry)
-			r, err := rcon.Login(*RconAddress, *RconPass)
-			if err != nil {
-				log.Printf("Rcon connect err because=\"%s\"", err)
-				retry++
-				continue
-			}
-
-			log.Printf("Rcon connected")
-			retry = 0
-
-			shouldUpdate := true
-			for shouldUpdate {
-				<-ticker.C
-				for id, user := range Users {
-					// is exist player
-					result, err := r.SendCommand(fmt.Sprintf("execute if entity %s", id))
+			<-ticker.C
+			for serverName, server := range servers {
+				// New rcon client
+				if server.rcon == nil {
+					time.Sleep(time.Duration(server.retry) * time.Second)
+					log.Printf("[Rcon/INFO]: server=\"%s\", message=\"try connecting\", retry=%d", serverName, server.retry)
+					r, err := rcon.Login(server.address, server.pass)
 					if err != nil {
-						shouldUpdate = false
-						break
+						log.Printf("[Rcon/ERROR]: server=\"%s\", message=\"filed connect: %s\"", serverName, err)
+						server.retry++
+						continue
 					}
-					isExist = strings.Contains(string(result.Body), "1")
-
-					// get Pos
-					for i := 0; i < 3; i++ {
-						result, err := r.SendCommand(fmt.Sprintf("data get entity %s Pos[%d]", id, i))
-						if err != nil {
-							shouldUpdate = false
-							break
-						}
-						match := posRegexp.FindAllSubmatch(result.Body, 1)
-						if len(match) != 1 {
-							continue
-						}
-
-						fmt.Sscanf(string(match[0][1]), "%f", &pos[i])
-					}
-					// get Dimension
-					result, err = r.SendCommand(fmt.Sprintf("data get entity %s Dimension", id))
-					if err != nil {
-						shouldUpdate = false
-						break
-					}
-					dimension := strings.Split(string(result.Body), " ")
-
-					UsersMutex.Lock()
-					user.isExist = isExist
-					user.Pos = pos
-					user.Dimension = dimension[len(dimension)-1]
-					UsersMutex.Unlock()
+					log.Printf("[Rcon/INFO]: server=\"%s\", message=\"connected\"", serverName)
+					server.retry = 0
+					server.rcon = r
 				}
+
+				// Update player position
+				go updatePosition(server)
 			}
 		}
 	}()
@@ -144,9 +121,16 @@ func main() {
 // ページ表示
 func HttpResponse(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Path
-	log.Println("Access:", r.RemoteAddr, "Path:", path)
+	filePath := filepath.Clean(path)
+	if strings.HasSuffix(path, "/") {
+		filePath += "index"
+	}
+	if filepath.Ext(filePath) == "" {
+		filePath += ".html"
+	}
+	filePath = filepath.Join(Root, filePath)
+	log.Printf("HTTP: method=\"%s\", IP=\"%s\", request=\"%s\", resource=\"%s\"", r.Method, r.RemoteAddr, path, filePath)
 
-	filePath := filepath.Join(Root, filepath.Clean(path))
 	http.ServeFile(w, r, filePath)
 }
 
@@ -210,7 +194,7 @@ func WebSocketResponse(ws *websocket.Conn) {
 				break
 			}
 			for id, user := range Users {
-				if id == meId || !me.isExist {
+				if (id == meId || !me.isExist) && !Debug {
 					continue
 				}
 
@@ -252,13 +236,13 @@ func WebSocketResponse(ws *websocket.Conn) {
 			return
 		}
 
-		if len(message)%4 != 0 || len(message)/4 < 10 || !me.isExist {
+		if (len(message)%4 != 0 || len(message)/4 < 10 || !me.isExist) && !Debug {
 			continue
 		}
 
 		packet := packetBuilder(opPCM, me.Header, message)
 		for id, user := range Users {
-			if id == meId || !user.isExist {
+			if (id == meId || !user.isExist) && !Debug {
 				continue
 			}
 
@@ -277,4 +261,57 @@ func packetBuilder(op opCode, header, body []byte) (packet []byte) {
 	packet = append(packet, body...)
 
 	return packet
+}
+
+func updatePosition(s *Server) {
+	// user data cache
+	posRegexp := regexp.MustCompile(`(-?[0-9]+\.[0-9]+)d`)
+	pos := [3]float64{0, 0, 0}
+	var isExist bool
+
+	isCancel := false
+	for !isCancel {
+		for id, user := range s.users {
+			// is exist player
+			result, err := s.rcon.SendCommand(fmt.Sprintf("execute if entity %s", id))
+			if err != nil {
+				isCancel = true
+				break
+			}
+			isExist = strings.Contains(string(result.Body), "1")
+
+			// get Pos
+			for i := 0; i < 3; i++ {
+				result, err := s.rcon.SendCommand(fmt.Sprintf("data get entity %s Pos[%d]", id, i))
+				if err != nil {
+					isCancel = true
+					break
+				}
+				match := posRegexp.FindAllSubmatch(result.Body, 1)
+				if len(match) != 1 {
+					continue
+				}
+
+				fmt.Sscanf(string(match[0][1]), "%f", &pos[i])
+			}
+			// get Dimension
+			result, err = s.rcon.SendCommand(fmt.Sprintf("data get entity %s Dimension", id))
+			if err != nil {
+				isCancel = true
+				break
+			}
+			dimension := strings.Split(string(result.Body), " ")
+
+			s.usersMu.Lock()
+			user.isExist = isExist
+			user.Pos = pos
+			user.Dimension = dimension[len(dimension)-1]
+			s.usersMu.Unlock()
+		}
+	}
+
+	if isCancel {
+		s.rcon.Close()
+		s.rcon = nil
+	}
 }
