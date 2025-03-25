@@ -24,11 +24,13 @@ var (
 	// Flags
 	Listen            = flag.String("listen", "1031", "http server listen port")
 	PosUpdateInterval = flag.Int("update", 1000, "check player position interval")
+
 	// Resource
 	Root      string = "./assets"
 	servers          = map[string]*Server{}
 	serversMu sync.Mutex
-	Debug     = true
+	// Other
+	isDebug = true
 )
 
 type Server struct {
@@ -69,6 +71,7 @@ func main() {
 
 	flag.Parse()
 
+	serversMu.Lock()
 	servers["test"] = &Server{
 		users:   map[string]*User{},
 		address: "localhost:25575",
@@ -76,6 +79,8 @@ func main() {
 		fadeout: 3.0,
 		mute:    15.0,
 	}
+	serversMu.Unlock()
+
 	// Http request handler
 	http.HandleFunc("/", HttpResponse)
 	http.Handle("/websocket", websocket.Handler(WebSocketResponse))
@@ -97,7 +102,7 @@ func main() {
 			for serverName, server := range servers {
 				// New rcon client
 				if server.rcon == nil {
-					time.Sleep(time.Duration(server.retry) * time.Second)
+					time.Sleep(time.Duration(server.retry*5) * time.Second)
 					log.Printf("[Rcon/INFO]: server=\"%s\", message=\"try connecting\", retry=%d", serverName, server.retry)
 					r, err := rcon.Login(server.address, server.pass)
 					if err != nil {
@@ -129,27 +134,36 @@ func HttpResponse(w http.ResponseWriter, r *http.Request) {
 		filePath += ".html"
 	}
 	filePath = filepath.Join(Root, filePath)
-	log.Printf("HTTP: method=\"%s\", IP=\"%s\", request=\"%s\", resource=\"%s\"", r.Method, r.RemoteAddr, path, filePath)
+	log.Printf("[Http/INFO]: IP=\"%s\", method:\"%s\", request=\"%s\", resource=\"%s\"", r.RemoteAddr, r.Method, path, filePath)
 
 	http.ServeFile(w, r, filePath)
 }
 
 // ウェブソケット処理
 func WebSocketResponse(ws *websocket.Conn) {
+	serverName := ws.Request().URL.Query().Get("server")
 	meId := ws.Request().URL.Query().Get("id")
 
 	header := make([]byte, 0, 4+16)
 	header = binary.LittleEndian.AppendUint16(header, uint16(len(meId)))
 	header = append(header, []byte(meId)...)
 
-	if _, ok := Users[meId]; ok {
-		log.Printf("Websocket connect cancel id=%s, because=\"Multi login not allowed.\"", meId)
+	server, ok := servers[serverName]
+	if !ok {
+		log.Printf("[Websocket/INFO]: server=\"%s\", client=\"%s\", IP=%s, message=\"cancel connect: server not found\"", serverName, meId, ws.RemoteAddr())
+		websocket.Message.Send(ws, packetBuilder(opMessage, header, []byte("Connection cancel: server not found.")))
+		ws.Close()
+		return
+	}
+
+	if _, ok := server.users[meId]; ok {
+		log.Printf("[Websocket/INFO]: server=\"%s\", client=\"%s\", IP=%s, message=\"cancel connect: multi login not allowed.\"", serverName, meId, ws.RemoteAddr())
 		websocket.Message.Send(ws, packetBuilder(opMessage, header, []byte("Connection cancel: multi login is not allowed.")))
 		ws.Close()
 		return
 	}
 
-	log.Printf("Websocket connect id=%s, IP=%s", meId, ws.RemoteAddr())
+	log.Printf("[Websocket/INFO]: server=\"%s\", client=\"%s\", IP=%s, message=\"new connect\"", serverName, meId, ws.RemoteAddr())
 	isClose := false
 
 	me := &User{
@@ -157,29 +171,29 @@ func WebSocketResponse(ws *websocket.Conn) {
 		Header: header,
 		Pos:    [3]float64{0, 0, 0},
 	}
-	UsersMutex.Lock()
-	Users[meId] = me
-	UsersMutex.Unlock()
+	server.usersMu.Lock()
+	server.users[meId] = me
+	server.usersMu.Unlock()
 
 	defer func() {
-		log.Printf("Websocket disconnect id=%s, IP=%s", meId, ws.RemoteAddr())
+		log.Printf("[Websocket/INFO]: server=\"%s\", client=\"%s\", IP=%s, message=\"disconnect\"", serverName, meId, ws.RemoteAddr())
 		packet := packetBuilder(opDelete, me.Header, []byte{})
-		for id, user := range Users {
+		for id, user := range server.users {
 			if id == meId {
 				continue
 			}
 
 			err := websocket.Message.Send(user.Conn, packet)
 			if err != nil {
-				log.Printf("Websocket err srcId=%s, destId=%s location=\"sent close message\", err=%s", meId, id, err)
+				log.Printf("[Websocket/ERROR]: server=\"%s\", client=\"%s\", IP=%s, to:\"%s\" message=\"failed sent close message: %s\"", serverName, meId, ws.RemoteAddr(), id, err)
 			}
 		}
 
 		isClose = true
 
-		UsersMutex.Lock()
-		delete(Users, meId)
-		UsersMutex.Unlock()
+		server.usersMu.Lock()
+		delete(server.users, meId)
+		server.usersMu.Unlock()
 
 		ws.Close()
 	}()
@@ -193,8 +207,9 @@ func WebSocketResponse(ws *websocket.Conn) {
 			if isClose {
 				break
 			}
-			for id, user := range Users {
-				if (id == meId || !me.isExist) && !Debug {
+
+			for id, user := range server.users {
+				if (id == meId || !me.isExist) && !isDebug {
 					continue
 				}
 
@@ -205,11 +220,11 @@ func WebSocketResponse(ws *websocket.Conn) {
 					z := (user.Pos[2] - me.Pos[2]) * (user.Pos[2] - me.Pos[2])
 					d := math.Sqrt(x + y + z)
 
-					if d <= *DistanceFadeout {
+					if d <= server.fadeout {
 						gain = 1
-					} else if d <= *DistanceMute {
-						d = d - *DistanceFadeout
-						distanceRange := *DistanceMute - *DistanceFadeout
+					} else if d <= server.mute {
+						d = d - server.fadeout
+						distanceRange := server.mute - server.fadeout
 						gain = 1 - (d / distanceRange)
 
 						if gain < 0 {
@@ -221,7 +236,7 @@ func WebSocketResponse(ws *websocket.Conn) {
 
 				err := websocket.Message.Send(user.Conn, packetBuilder(opGain, me.Header, gainBytes))
 				if err != nil {
-					log.Printf("Websocket err srcId=%s, destId=%s location=\"sent pcm message\", err=%s", meId, id, err)
+					log.Printf("[Websocket/ERROR]: server=\"%s\", client=\"%s\", IP=%s, to:\"%s\" message=\"failed sent gain message: %s\"", serverName, meId, ws.RemoteAddr(), id, err)
 				}
 			}
 		}
@@ -236,19 +251,19 @@ func WebSocketResponse(ws *websocket.Conn) {
 			return
 		}
 
-		if (len(message)%4 != 0 || len(message)/4 < 10 || !me.isExist) && !Debug {
+		if (len(message)%4 != 0 || len(message)/4 < 10 || !me.isExist) && !isDebug {
 			continue
 		}
 
 		packet := packetBuilder(opPCM, me.Header, message)
-		for id, user := range Users {
-			if (id == meId || !user.isExist) && !Debug {
+		for id, user := range server.users {
+			if (id == meId || !user.isExist) && !isDebug {
 				continue
 			}
 
 			err := websocket.Message.Send(user.Conn, packet)
 			if err != nil {
-				log.Printf("Websocket err srcId=%s, destId=%s location=\"sent pcm message\", err=%s", meId, id, err)
+				log.Printf("[Websocket/ERROR]: server=\"%s\", client=\"%s\", IP=%s, to:\"%s\" message=\"failed sent pcm message: %s\"", serverName, meId, ws.RemoteAddr(), id, err)
 			}
 		}
 	}
