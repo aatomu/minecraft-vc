@@ -32,6 +32,11 @@ let users = {}
 console.log("Global initialize")
 const url = new URL(window.location.href)
 const params = new URLSearchParams(url.searchParams)
+const server = params.get("server")
+if (!server) {
+  updateButton(true, "Please reload", "")
+  updateMessage("Error: required server parameter.")
+}
 const id = params.get("id")
 if (!id) {
   updateButton(true, "Please reload", "")
@@ -71,7 +76,7 @@ function clickButton() {
 async function NewConnection() {
   // Websocket initialize
   console.log("Websocket initialize")
-  const ws = new WebSocket(`./websocket?id=${id}`)
+  const ws = new WebSocket(`./websocket?server=${server}&id=${id}`)
   ws.binaryType = "arraybuffer"
   let isClosed = false
   ws.addEventListener("open", () => {
