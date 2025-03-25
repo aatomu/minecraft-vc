@@ -285,47 +285,45 @@ func updatePosition(s *Server) {
 	var isExist bool
 
 	isCancel := false
-	for !isCancel {
-		for id, user := range s.users {
-			// is exist player
-			result, err := s.rcon.SendCommand(fmt.Sprintf("execute if entity %s", id))
-			if err != nil {
-				isCancel = true
-				break
-			}
-			isExist = strings.Contains(string(result.Body), "1")
-
-			// get Pos
-			for i := 0; i < 3; i++ {
-				result, err := s.rcon.SendCommand(fmt.Sprintf("data get entity %s Pos[%d]", id, i))
-				if err != nil {
-					isCancel = true
-					break
-				}
-				match := posRegexp.FindAllSubmatch(result.Body, 1)
-				if len(match) != 1 {
-					continue
-				}
-
-				fmt.Sscanf(string(match[0][1]), "%f", &pos[i])
-			}
-			// get Dimension
-			result, err = s.rcon.SendCommand(fmt.Sprintf("data get entity %s Dimension", id))
-			if err != nil {
-				isCancel = true
-				break
-			}
-			dimension := strings.Split(string(result.Body), " ")
-
-			s.usersMu.Lock()
-			user.isExist = isExist
-			user.Pos = pos
-			user.Dimension = dimension[len(dimension)-1]
-			s.usersMu.Unlock()
+	for id, user := range s.users {
+		// is exist player
+		result, err := s.rcon.SendCommand(fmt.Sprintf("execute if entity %s", id))
+		if err != nil {
+			isCancel = true
+			break
 		}
+		isExist = strings.Contains(string(result.Body), "1")
+
+		// get Pos
+		for i := 0; i < 3; i++ {
+			result, err := s.rcon.SendCommand(fmt.Sprintf("data get entity %s Pos[%d]", id, i))
+			if err != nil {
+				isCancel = true
+				break
+			}
+			match := posRegexp.FindAllSubmatch(result.Body, 1)
+			if len(match) != 1 {
+				continue
+			}
+
+			fmt.Sscanf(string(match[0][1]), "%f", &pos[i])
+		}
+		// get Dimension
+		result, err = s.rcon.SendCommand(fmt.Sprintf("data get entity %s Dimension", id))
+		if err != nil {
+			isCancel = true
+			break
+		}
+		dimension := strings.Split(string(result.Body), " ")
+
+		s.usersMu.Lock()
+		user.isExist = isExist
+		user.Pos = pos
+		user.Dimension = dimension[len(dimension)-1]
+		s.usersMu.Unlock()
 	}
 
-	if isCancel {
+	if isCancel && s.rcon != nil {
 		s.rcon.Close()
 		s.rcon = nil
 	}
