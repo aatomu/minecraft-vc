@@ -24,7 +24,7 @@ import (
 
 var (
 	// Flags
-	Listen            = flag.String("listen", "1031", "http server listen port")
+	Listen            = flag.Int("listen", 1031, "http server listen port")
 	PosUpdateInterval = flag.Int("update", 1000, "check player position interval")
 
 	// Resource
@@ -89,7 +89,7 @@ func main() {
 	// Boot http server
 	go func() {
 		log.Println("Http Server Boot")
-		err := http.ListenAndServe(":"+*Listen, nil)
+		err := http.ListenAndServe(fmt.Sprintf(":%d", *Listen), nil)
 		if err != nil {
 			log.Println("Failed Listen:", err)
 			return
