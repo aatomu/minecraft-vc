@@ -1,22 +1,20 @@
 // @ts-check
+///<reference path="./script.js">
 
 // Global variables
 /** @type {HTMLInputElement} */
 // @ts-expect-error
-const button = document.getElementById("button")
-/** @type {HTMLInputElement} */
-// @ts-expect-error
-const buttonMessage = document.getElementById("button")
+const BUTTON = document.getElementById("button")
 let buttonState = 0
 let isMute = false
 /** @type {HTMLDivElement} */
 // @ts-expect-error
-const volumes = document.getElementById("volumes")
+const VOLUME_LIST = document.getElementById("volumes")
 /** @type {AudioContext} */
 // @ts-expect-error
 let audioCtx = undefined
-const sampleRate = 44100
-const inputBufferTime = 100
+const SAMPLE_RATE = 44100
+const INPUT_BUFFER_TIME = 100
 let buffer = []
 /** @type {Object.<string,User>} */
 let users = {}
@@ -30,20 +28,18 @@ let users = {}
 
 // Websocket initialize
 console.log("Global initialize")
-const url = new URL(window.location.href)
-const params = new URLSearchParams(url.searchParams)
-const server = params.get("server")
+const server = URL_PARAMS.get("server")
 if (!server) {
   updateButton(true, "Please reload", "")
   updateMessage("Error: required server parameter.")
 }
-const id = params.get("id")
+const id = URL_PARAMS.get("id")
 if (!id) {
   updateButton(true, "Please reload", "")
   updateMessage("Error: required MCID parameter.")
 }
 
-button.addEventListener("click", clickButton)
+BUTTON.addEventListener("click", clickButton)
 
 function clickButton() {
   console.log(`Click button: state=${buttonState}`)
@@ -91,7 +87,7 @@ async function NewConnection() {
       }
       buffer = []
 
-    }, inputBufferTime)
+    }, INPUT_BUFFER_TIME)
   })
   ws.addEventListener("message", (e) => {
     if (!e.data) return
@@ -172,7 +168,7 @@ async function NewConnection() {
   console.log("Get Voice stream")
   const media = await navigator.mediaDevices.getUserMedia({
     audio: {
-      sampleRate: sampleRate,
+      sampleRate: SAMPLE_RATE,
     },
     video: true,
   })
@@ -188,7 +184,7 @@ async function NewConnection() {
  * @param {Float32Array} pcm
  */
 function playAudioStream(id, pcm) {
-  const buffer = audioCtx.createBuffer(1, pcm.length, sampleRate)
+  const buffer = audioCtx.createBuffer(1, pcm.length, SAMPLE_RATE)
   const source = audioCtx.createBufferSource()
   const currentTime = audioCtx.currentTime;
 
@@ -235,25 +231,25 @@ function newVolume(id) {
   volumeValue.innerText = `(100%)`
   group.append(volumeValue)
 
-  if (volumes.children.length > 0) {
+  if (VOLUME_LIST.children.length > 0) {
     let isPlaced = false
-    for (let i = 0; i < volumes.children.length; i++) {
+    for (let i = 0; i < VOLUME_LIST.children.length; i++) {
       /** @type {HTMLSpanElement} */
       //@ts-expect-error
-      const childrenName = volumes.children[i].querySelector(".volume-name")
-      volumes.children[0].querySelector(".volume-name")
+      const childrenName = VOLUME_LIST.children[i].querySelector(".volume-name")
+      VOLUME_LIST.children[0].querySelector(".volume-name")
 
       if (id.localeCompare(childrenName.innerText) < 0) {
-        volumes.children[i].before(group)
+        VOLUME_LIST.children[i].before(group)
         isPlaced = true
         break
       }
     }
     if (!isPlaced) {
-      volumes.append(group)
+      VOLUME_LIST.append(group)
     }
   } else {
-    volumes.append(group)
+    VOLUME_LIST.append(group)
   }
 
   volume.addEventListener("input", () => {
@@ -320,11 +316,11 @@ function updateMessage(text) {
  */
 function updateButton(isDisable, text, color) {
   if (isDisable) {
-    button.setAttribute("disabled", "true")
-    button.classList.add("button-disable")
+    BUTTON.setAttribute("disabled", "true")
+    BUTTON.classList.add("button-disable")
   } else {
-    button.removeAttribute("disabled")
-    button.classList.remove("button-disable")
+    BUTTON.removeAttribute("disabled")
+    BUTTON.classList.remove("button-disable")
   }
 
   /** @type {HTMLSpanElement} */
