@@ -22,14 +22,18 @@ import (
 	"golang.org/x/net/websocket"
 )
 
+const (
+	Root   string = "./assets"
+	Config string = "./config.json"
+)
+
 var (
 	// Flags
 	Listen            = flag.Int("listen", 1031, "http server listen port")
 	PosUpdateInterval = flag.Int("update", 1000, "check player position interval")
 
 	// Resource
-	Root      string = "./assets"
-	servers          = map[string]*Server{}
+	servers   = map[string]*Server{}
 	serversMu sync.Mutex
 	// Other
 	isDebug = true
@@ -47,6 +51,8 @@ type Server struct {
 	// Volume
 	Fadeout float64 `json:"fadeout"`
 	Mute    float64 `json:"mute"`
+	// Control
+	isClose bool `json:"-"`
 }
 
 type User struct {
@@ -73,55 +79,22 @@ func main() {
 
 	flag.Parse()
 
-	serversMu.Lock()
-	servers["test"] = &Server{
-		users:   map[string]*User{},
-		address: "localhost:25575",
-		pass:    "0000",
-		fadeout: 3.0,
-		mute:    15.0,
-	}
-	serversMu.Unlock()
+	// Load Server Config
+	loadServers()
 
 	// Http request handler
 	http.HandleFunc("/", HttpResponse)
 	http.Handle("/websocket", websocket.Handler(WebSocketResponse))
 	// Boot http server
 	go func() {
-		log.Println("Http Server Boot")
+		log.Printf("[Http/INFO]: message=\"server has listen\"")
 		err := http.ListenAndServe(fmt.Sprintf(":%d", *Listen), nil)
 		if err != nil {
-			log.Println("Failed Listen:", err)
+			log.Printf("[Http/ERROR]: message=\"failed server listen: %s\"", err)
 			return
 		}
 	}()
 
-	go func() {
-		ticker := time.NewTicker(time.Duration(*PosUpdateInterval) * time.Millisecond)
-
-		for {
-			<-ticker.C
-			for serverName, server := range servers {
-				// New rcon client
-				if server.Rcon == nil {
-					time.Sleep(time.Duration(server.Retry*5) * time.Second)
-					log.Printf("[Rcon/INFO]: server=\"%s\", message=\"try connecting\", retry=%d", serverName, server.Retry)
-					r, err := rcon.Login(server.Address, server.Pass)
-					if err != nil {
-						log.Printf("[Rcon/ERROR]: server=\"%s\", message=\"filed connect: %s\"", serverName, err)
-						server.Retry++
-						continue
-					}
-					log.Printf("[Rcon/INFO]: server=\"%s\", message=\"connected\"", serverName)
-					server.Retry = 0
-					server.Rcon = r
-				}
-
-				// Update player position
-				go updatePosition(server)
-			}
-		}
-	}()
 	<-utils.BreakSignal()
 }
 
@@ -235,16 +208,15 @@ func HttpResponse(w http.ResponseWriter, r *http.Request) {
 					return
 				}
 
-				serversMu.Lock()
-				servers[name] = &Server{
+				newServer(name, &Server{
 					Users:   map[string]*User{},
 					UsersMu: &sync.Mutex{},
 					Address: server.Address,
 					Pass:    server.Pass,
 					Fadeout: server.Fadeout,
 					Mute:    server.Mute,
-				}
-				serversMu.Unlock()
+				})
+				saveServers()
 
 				w.WriteHeader(http.StatusCreated)
 			case http.MethodDelete:
@@ -262,9 +234,9 @@ func HttpResponse(w http.ResponseWriter, r *http.Request) {
 					return
 				}
 
-				serversMu.Lock()
-				delete(servers, name)
-				serversMu.Unlock()
+				deleteServer(name)
+				saveServers()
+
 				returnRequest(w, http.StatusNoContent, nil)
 			default:
 				returnRequest(w, http.StatusMethodNotAllowed, nil)
@@ -487,4 +459,110 @@ func updatePosition(s *Server) {
 		s.Rcon.Close()
 		s.Rcon = nil
 	}
+}
+
+func saveServers() {
+	config := map[string]Server{}
+	for name, server := range servers {
+		config[name] = Server{
+			Address: server.Address,
+			Pass:    server.Pass,
+			Fadeout: server.Fadeout,
+			Mute:    server.Mute,
+		}
+	}
+
+	rawConfig, err := json.MarshalIndent(config, "", "    ")
+	if err != nil {
+		log.Printf("[Root/ERROR]: message=\"failed parse save config: %s\"", err)
+		return
+	}
+
+	err = os.WriteFile(Config, rawConfig, 0755)
+	if err != nil {
+		log.Printf("[Root/ERROR]: message=\"failed save config: %s\"", err)
+		return
+	}
+
+	log.Printf("[Root/INFO]: message=\"saved config\"")
+}
+
+func loadServers() {
+	rawConfig, err := os.ReadFile(Config)
+	if err != nil {
+		log.Printf("[Root/ERROR]: message=\"failed read config: %s\"", err)
+		return
+	}
+
+	var config map[string]Server
+	err = json.Unmarshal(rawConfig, &config)
+	if err != nil {
+		log.Printf("[Root/ERROR]: message=\"failed parse load config: %s\"", err)
+		return
+	}
+
+	for name, server := range config {
+		newServer(name, &Server{
+			Users:   map[string]*User{},
+			UsersMu: &sync.Mutex{},
+			Address: server.Address,
+			Pass:    server.Pass,
+			Fadeout: server.Fadeout,
+			Mute:    server.Mute,
+		})
+	}
+
+	log.Printf("[Root/INFO]: message=\"loaded config\"")
+}
+
+func newServer(name string, server *Server) {
+	serversMu.Lock()
+	servers[name] = server
+	serversMu.Unlock()
+
+	go func() {
+		ticker := time.NewTicker(time.Duration(*PosUpdateInterval) * time.Millisecond)
+		defer func() {
+			ticker.Stop()
+		}()
+
+		for {
+			<-ticker.C
+			if server.isClose {
+				break
+			}
+			// New rcon client
+			if server.Rcon == nil {
+				time.Sleep(time.Duration(server.Retry*5) * time.Second)
+				log.Printf("[Rcon/INFO]: server=\"%s\", message=\"try connecting\", retry=%d", name, server.Retry)
+				r, err := rcon.Login(server.Address, server.Pass)
+				if err != nil {
+					log.Printf("[Rcon/ERROR]: server=\"%s\", message=\"filed connect: %s\"", name, err)
+					server.Retry++
+					break
+				}
+				log.Printf("[Rcon/INFO]: server=\"%s\", message=\"connected\"", name)
+				server.Retry = 0
+				server.Rcon = r
+			}
+
+			// Update player position
+			go updatePosition(server)
+		}
+	}()
+}
+
+func deleteServer(name string) {
+	server := servers[name]
+
+	server.UsersMu.Lock()
+
+	for _, user := range server.Users {
+		websocket.Message.Send(user.Conn, packetBuilder(opMessage, user.Header, []byte("Connection cancel: server delete")))
+		user.Conn.Close()
+	}
+
+	serversMu.Lock()
+	delete(servers, name)
+	serversMu.Unlock()
 }
