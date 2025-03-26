@@ -2,8 +2,10 @@ package main
 
 import (
 	"encoding/binary"
+	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"math"
 	"net/http"
@@ -35,16 +37,16 @@ var (
 
 type Server struct {
 	// User
-	users   map[string]*User
-	usersMu sync.Mutex
+	Users   map[string]*User `json:"-"`
+	UsersMu *sync.Mutex      `json:"-"`
 	// Rcon
-	address string
-	pass    string
-	rcon    *rcon.Rcon
-	retry   int
+	Address string     `json:"address"`
+	Pass    string     `json:"pass"`
+	Rcon    *rcon.Rcon `json:"-"`
+	Retry   int        `json:"-"`
 	// Volume
-	fadeout float64
-	mute    float64
+	Fadeout float64 `json:"fadeout"`
+	Mute    float64 `json:"mute"`
 }
 
 type User struct {
@@ -101,18 +103,18 @@ func main() {
 			<-ticker.C
 			for serverName, server := range servers {
 				// New rcon client
-				if server.rcon == nil {
-					time.Sleep(time.Duration(server.retry*5) * time.Second)
-					log.Printf("[Rcon/INFO]: server=\"%s\", message=\"try connecting\", retry=%d", serverName, server.retry)
-					r, err := rcon.Login(server.address, server.pass)
+				if server.Rcon == nil {
+					time.Sleep(time.Duration(server.Retry*5) * time.Second)
+					log.Printf("[Rcon/INFO]: server=\"%s\", message=\"try connecting\", retry=%d", serverName, server.Retry)
+					r, err := rcon.Login(server.Address, server.Pass)
 					if err != nil {
 						log.Printf("[Rcon/ERROR]: server=\"%s\", message=\"filed connect: %s\"", serverName, err)
-						server.retry++
+						server.Retry++
 						continue
 					}
 					log.Printf("[Rcon/INFO]: server=\"%s\", message=\"connected\"", serverName)
-					server.retry = 0
-					server.rcon = r
+					server.Retry = 0
+					server.Rcon = r
 				}
 
 				// Update player position
@@ -127,7 +129,156 @@ func main() {
 func HttpResponse(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Path
 	filePath := filepath.Clean(path)
-	if strings.HasSuffix(path, "/") {
+
+	if strings.HasPrefix(filePath, "/api") {
+		split := strings.Split(filePath, "/")
+		if len(split) < 2 {
+			returnRequest(w, http.StatusBadRequest, map[string]interface{}{
+				"error": "function is required",
+			})
+			log.Printf("[Http/ERROR]: IP=\"%s\", method:\"%s\", request=\"%s\", message=\"function is required\"", r.RemoteAddr, r.Method, path)
+			return
+		}
+
+		resource := split[2]
+		switch resource {
+		case "servers":
+			switch r.Method {
+			case http.MethodGet:
+				server_list := map[string]Server{}
+
+				for name, server := range servers {
+					server_list[name] = Server{
+						// Rcon
+						Address: strings.Repeat("*", len(server.Address)),
+						Pass:    strings.Repeat("*", len(server.Pass)),
+						// Volume
+						Fadeout: server.Fadeout,
+						Mute:    server.Mute,
+					}
+				}
+
+				w.Header().Set("Content-Type", "application/json")
+				data, _ := json.Marshal(server_list)
+				w.Write(data)
+			default:
+				returnRequest(w, http.StatusMethodNotAllowed, nil)
+			}
+		case "server":
+			name := r.Header.Get("X-Name")
+			pass := r.Header.Get("X-Password")
+
+			server, ok := servers[name]
+
+			switch r.Method {
+			case http.MethodGet:
+				if !ok {
+					returnRequest(w, http.StatusNotFound, map[string]interface {
+					}{
+						"error": "server not found",
+					})
+					log.Printf("[Http/ERROR]: IP=\"%s\", method:\"%s\", request=\"%s\", message=\"server not found: %s\"", r.RemoteAddr, r.Method, path, name)
+					return
+				}
+				if server.Pass != pass {
+					returnRequest(w, http.StatusUnauthorized, nil)
+					log.Printf("[Http/ERROR]: IP=\"%s\", method:\"%s\", request=\"%s\", message=\"password miss match: server=\\\"%s\\\", request=\\\"%s\\\"\"", r.RemoteAddr, r.Method, path, server.Pass, pass)
+					return
+				}
+				result := Server{
+					// Rcon
+					Address: server.Address,
+					Pass:    server.Pass,
+					// Volume
+					Fadeout: server.Fadeout,
+					Mute:    server.Mute,
+				}
+
+				w.Header().Set("Content-Type", "application/json")
+				data, _ := json.Marshal(result)
+				w.Write(data)
+			case http.MethodPut:
+				if name == "" {
+					returnRequest(w, http.StatusBadRequest, map[string]interface {
+					}{
+						"error": "missing server name",
+					})
+					log.Printf("[Http/ERROR]: IP=\"%s\", method:\"%s\", request=\"%s\", message=\"missing server name\"", r.RemoteAddr, r.Method, path)
+					return
+				}
+				if ok {
+					returnRequest(w, http.StatusBadRequest, map[string]interface {
+					}{
+						"error": "server already exists",
+					})
+					log.Printf("[Http/ERROR]: IP=\"%s\", method:\"%s\", request=\"%s\", message=\"server already exists: %s\"", r.RemoteAddr, r.Method, path, name)
+					return
+				}
+
+				body, err := io.ReadAll(r.Body)
+				if err != nil {
+					returnRequest(w, http.StatusBadRequest, map[string]interface {
+					}{
+						"error": "failed body read",
+					})
+					log.Printf("[Http/ERROR]: IP=\"%s\", method:\"%s\", request=\"%s\", message=\"failed body read: %s\"", r.RemoteAddr, r.Method, path, err)
+					return
+				}
+				var server Server
+				err = json.Unmarshal(body, &server)
+				if err != nil {
+					returnRequest(w, http.StatusBadRequest, map[string]interface {
+					}{
+						"error": "failed to parse body",
+					})
+					log.Printf("[Http/ERROR]: IP=\"%s\", method:\"%s\", request=\"%s\", message=\"failed to parse body: %s\"", r.RemoteAddr, r.Method, path, err)
+					return
+				}
+
+				serversMu.Lock()
+				servers[name] = &Server{
+					Users:   map[string]*User{},
+					UsersMu: &sync.Mutex{},
+					Address: server.Address,
+					Pass:    server.Pass,
+					Fadeout: server.Fadeout,
+					Mute:    server.Mute,
+				}
+				serversMu.Unlock()
+
+				w.WriteHeader(http.StatusCreated)
+			case http.MethodDelete:
+				if !ok {
+					returnRequest(w, http.StatusNotFound, map[string]interface {
+					}{
+						"error": "server not found",
+					})
+					log.Printf("[Http/ERROR]: IP=\"%s\", method:\"%s\", request=\"%s\", message=\"server not found: %s\"", r.RemoteAddr, r.Method, path, name)
+					return
+				}
+				if server.Pass != pass {
+					returnRequest(w, http.StatusUnauthorized, nil)
+					log.Printf("[Http/ERROR]: IP=\"%s\", method:\"%s\", request=\"%s\", message=\"password miss match: server=\\\"%s\\\", request=\\\"%s\\\"\"", r.RemoteAddr, r.Method, path, server.Pass, pass)
+					return
+				}
+
+				serversMu.Lock()
+				delete(servers, name)
+				serversMu.Unlock()
+				returnRequest(w, http.StatusNoContent, nil)
+			default:
+				returnRequest(w, http.StatusMethodNotAllowed, nil)
+			}
+		default:
+			returnRequest(w, http.StatusNotFound, map[string]interface{}{
+				"error": "function not found",
+			})
+		}
+		log.Printf("[Http/INFO]: IP=\"%s\", method:\"%s\", API=\"%s\"", r.RemoteAddr, r.Method, resource)
+		return
+	}
+
+	if strings.HasSuffix(filePath, "/") {
 		filePath += "index"
 	}
 	if filepath.Ext(filePath) == "" {
@@ -137,6 +288,15 @@ func HttpResponse(w http.ResponseWriter, r *http.Request) {
 	log.Printf("[Http/INFO]: IP=\"%s\", method:\"%s\", request=\"%s\", resource=\"%s\"", r.RemoteAddr, r.Method, path, filePath)
 
 	http.ServeFile(w, r, filePath)
+}
+
+func returnRequest(w http.ResponseWriter, status int, body map[string]interface{}) {
+	w.WriteHeader(status)
+
+	if body != nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(body)
+	}
 }
 
 // ウェブソケット処理
@@ -156,7 +316,7 @@ func WebSocketResponse(ws *websocket.Conn) {
 		return
 	}
 
-	if _, ok := server.users[meId]; ok {
+	if _, ok := server.Users[meId]; ok {
 		log.Printf("[Websocket/INFO]: server=\"%s\", client=\"%s\", IP=%s, message=\"cancel connect: multi login not allowed.\"", serverName, meId, ws.RemoteAddr())
 		websocket.Message.Send(ws, packetBuilder(opMessage, header, []byte("Connection cancel: multi login is not allowed.")))
 		ws.Close()
@@ -171,14 +331,14 @@ func WebSocketResponse(ws *websocket.Conn) {
 		Header: header,
 		Pos:    [3]float64{0, 0, 0},
 	}
-	server.usersMu.Lock()
-	server.users[meId] = me
-	server.usersMu.Unlock()
+	server.UsersMu.Lock()
+	server.Users[meId] = me
+	server.UsersMu.Unlock()
 
 	defer func() {
 		log.Printf("[Websocket/INFO]: server=\"%s\", client=\"%s\", IP=%s, message=\"disconnect\"", serverName, meId, ws.RemoteAddr())
 		packet := packetBuilder(opDelete, me.Header, []byte{})
-		for id, user := range server.users {
+		for id, user := range server.Users {
 			if id == meId {
 				continue
 			}
@@ -191,9 +351,9 @@ func WebSocketResponse(ws *websocket.Conn) {
 
 		isClose = true
 
-		server.usersMu.Lock()
-		delete(server.users, meId)
-		server.usersMu.Unlock()
+		server.UsersMu.Lock()
+		delete(server.Users, meId)
+		server.UsersMu.Unlock()
 
 		ws.Close()
 	}()
@@ -208,7 +368,7 @@ func WebSocketResponse(ws *websocket.Conn) {
 				break
 			}
 
-			for id, user := range server.users {
+			for id, user := range server.Users {
 				if (id == meId || !me.isExist) && !isDebug {
 					continue
 				}
@@ -220,11 +380,11 @@ func WebSocketResponse(ws *websocket.Conn) {
 					z := (user.Pos[2] - me.Pos[2]) * (user.Pos[2] - me.Pos[2])
 					d := math.Sqrt(x + y + z)
 
-					if d <= server.fadeout {
+					if d <= server.Fadeout {
 						gain = 1
-					} else if d <= server.mute {
-						d = d - server.fadeout
-						distanceRange := server.mute - server.fadeout
+					} else if d < server.Mute {
+						d = d - server.Fadeout
+						distanceRange := server.Mute - server.Fadeout
 						gain = 1 - (d / distanceRange)
 
 						if gain < 0 {
@@ -251,12 +411,12 @@ func WebSocketResponse(ws *websocket.Conn) {
 			return
 		}
 
-		if (len(message)%4 != 0 || len(message)/4 < 10 || !me.isExist) && !isDebug {
+		if len(message)%4 != 0 || len(message)/4 < 10 || (!me.isExist && !isDebug) {
 			continue
 		}
 
 		packet := packetBuilder(opPCM, me.Header, message)
-		for id, user := range server.users {
+		for id, user := range server.Users {
 			if (id == meId || !user.isExist) && !isDebug {
 				continue
 			}
@@ -285,9 +445,9 @@ func updatePosition(s *Server) {
 	var isExist bool
 
 	isCancel := false
-	for id, user := range s.users {
+	for id, user := range s.Users {
 		// is exist player
-		result, err := s.rcon.SendCommand(fmt.Sprintf("execute if entity %s", id))
+		result, err := s.Rcon.SendCommand(fmt.Sprintf("execute if entity %s", id))
 		if err != nil {
 			isCancel = true
 			break
@@ -296,7 +456,7 @@ func updatePosition(s *Server) {
 
 		// get Pos
 		for i := 0; i < 3; i++ {
-			result, err := s.rcon.SendCommand(fmt.Sprintf("data get entity %s Pos[%d]", id, i))
+			result, err := s.Rcon.SendCommand(fmt.Sprintf("data get entity %s Pos[%d]", id, i))
 			if err != nil {
 				isCancel = true
 				break
@@ -309,22 +469,22 @@ func updatePosition(s *Server) {
 			fmt.Sscanf(string(match[0][1]), "%f", &pos[i])
 		}
 		// get Dimension
-		result, err = s.rcon.SendCommand(fmt.Sprintf("data get entity %s Dimension", id))
+		result, err = s.Rcon.SendCommand(fmt.Sprintf("data get entity %s Dimension", id))
 		if err != nil {
 			isCancel = true
 			break
 		}
 		dimension := strings.Split(string(result.Body), " ")
 
-		s.usersMu.Lock()
+		s.UsersMu.Lock()
 		user.isExist = isExist
 		user.Pos = pos
 		user.Dimension = dimension[len(dimension)-1]
-		s.usersMu.Unlock()
+		s.UsersMu.Unlock()
 	}
 
-	if isCancel && s.rcon != nil {
-		s.rcon.Close()
-		s.rcon = nil
+	if isCancel && s.Rcon != nil {
+		s.Rcon.Close()
+		s.Rcon = nil
 	}
 }
