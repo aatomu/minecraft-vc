@@ -14,13 +14,15 @@ go run .
 
 ### Minecraft サーバーの設定
 
-`server.properties`の以下の設定を変更します。
+1. `server.properties`の以下の設定を変更します。
 
 ```properties
 enable-rcon=true
 rcon.password=<Your Original Password>
 rcon.port=<Your Use Port>
 ```
+
+2. Minecraft サーバーを起動します
 
 ### サーバーの設定
 
@@ -30,7 +32,7 @@ rcon.port=<Your Use Port>
 http://localhost:1031/
 ```
 
-2. F12 を開き Dev Tool を開きます。
+2. F12 を開き Dev Tool を開き、コンソールタブを開きます。
 3. 以下のコードを実行します。
 
 ```js
@@ -60,7 +62,7 @@ http://localhost/
 4. `Connect`をクリックします。この際 ページ遷移が発生します
 5. 画面上部の`Connect to VC`をクリックすると、ボイスチャットが利用できます
 
-# 引数/コンフィグ
+# ドキュメント
 
 ### サーバーソフトの起動
 
