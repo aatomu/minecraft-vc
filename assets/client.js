@@ -225,7 +225,7 @@ function newVolume(id) {
   volume.setAttribute("min", "0")
   volume.setAttribute("max", "1")
   volume.setAttribute("step", "0.01")
-  volume.value = "1"
+  volume.value = "0.1"
   group.append(volume)
 
   const volumeValue = document.createElement("div")
@@ -256,7 +256,6 @@ function newVolume(id) {
   }
 
   volume.addEventListener("input", () => {
-    const value = volume.value
     updateVolume(id)
   })
 
