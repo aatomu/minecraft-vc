@@ -11,18 +11,25 @@
     <h1>Minecraft VC</h1>
     <div class="button">
       <label>
-        <span id="button-message">Connect to VC</span>
-        <button style="display:none;" id="button"></button>
+        <span id="button-message">Server Name</span>
+        <input type="text" placeholder="example-server"  id="server"></input>
       </label>
     </div>
-    <span>ステータス:<span id="message"></span></span>
-    <div class="users">
-      <span class="users-header">プレイヤーリスト</span>
-      <div id="volumes" class="volumes">
-      </div>
+    <div class="button">
+      <label>
+        <span id="button-message">Your MCID</span>
+        <input type="text" placeholder="Steve" id="mcid"></input>
+      </label>
+    </div>
+    <div class="button">
+      <label>
+        <span id="button-message">Connect</span>
+        <button style="display:none;"  id="button"></button>
+      </label>
     </div>
   </div>
 </body>
 
 <script src="./script.js"></script>
+<script src="./index.js"></script>
 <script src="./server.js"></script>
