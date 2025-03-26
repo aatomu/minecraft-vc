@@ -148,7 +148,10 @@ async function NewConnection() {
     if (e.code != 1000) {
       updateMessage(`Connection close: code=${e.code}`)
     }
-    audioCtx.close()
+
+    if (audioCtx) {
+      audioCtx.close()
+    }
     isClosed = true
   })
 
@@ -156,7 +159,7 @@ async function NewConnection() {
   console.log("Audio API initialize")
   users = {}
   // @ts-expect-error
-  audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: sampleRate });
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: SAMPLE_RATE });
   await audioCtx.audioWorklet.addModule(`./getPcmProcessor.js?t=${new Date()}`)
   const getPcmNode = new AudioWorkletNode(audioCtx, "get-pcm-processor")
   getPcmNode.port.onmessage = (e) => {
