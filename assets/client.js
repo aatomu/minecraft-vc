@@ -7,6 +7,13 @@
 const BUTTON = document.getElementById("button")
 let buttonState = 0
 let isMute = false
+/** @type {HTMLInputElement} */
+// @ts-expect-error
+const MIC_THRESHOLD = document.getElementById("mic-threshold")
+let isSilent = false
+/** @type {HTMLSpanElement} */
+// @ts-expect-error
+const MIC_THRESHOLD_VALUE = document.getElementById("mic-threshold-value")
 /** @type {HTMLDivElement} */
 // @ts-expect-error
 const VOLUME_LIST = document.getElementById("volumes")
@@ -45,7 +52,7 @@ function clickButton() {
   console.log(`Click button: state=${buttonState}`)
   switch (buttonState) {
     case 0: {
-      NewConnection()
+      newConnection()
       isMute = false
 
       updateButton(false, "Mic to mute", "green")
@@ -69,7 +76,17 @@ function clickButton() {
   }
 }
 
-async function NewConnection() {
+MIC_THRESHOLD.value = getCookie("$threshold") ?? "25"
+updateThreshold()
+MIC_THRESHOLD.addEventListener("click", updateThreshold)
+
+function updateThreshold() {
+  const threshold = Number(MIC_THRESHOLD.value) ?? 0
+  MIC_THRESHOLD_VALUE.innerText = `(${threshold.toString().padStart(3, "0")})`
+  setCookie("$threshold", String(threshold))
+}
+
+async function newConnection() {
   // Websocket initialize
   console.log("Websocket initialize")
   const ws = new WebSocket(`./websocket?server=${server}&id=${id}`)
@@ -109,7 +126,7 @@ async function NewConnection() {
         clientGainNode: audioCtx.createGain(),
         schedule: audioCtx.currentTime,
       }
-      users[id].serverGainNode.gain.value = 0
+      users[id].serverGainNode.gain.setValueAtTime(0, audioCtx.currentTime)
       users[id].serverGainNode.connect(users[id].clientGainNode)
       users[id].clientGainNode.connect(audioCtx.destination)
 
@@ -158,11 +175,39 @@ async function NewConnection() {
   // Audio API initialize
   console.log("Audio API initialize")
   users = {}
-  // @ts-expect-error
-  audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: SAMPLE_RATE });
+  audioCtx = new window.AudioContext({ sampleRate: SAMPLE_RATE });
+  const analyzer = audioCtx.createAnalyser()
+  analyzer.fftSize = 512
+  const analyzerBuffer = new Uint8Array(analyzer.frequencyBinCount)
+  const delay = audioCtx.createDelay()
+  delay.delayTime.setValueAtTime(0.3, audioCtx.currentTime + 0.000)
+  const gainNode = audioCtx.createGain()
+  gainNode.gain.setValueAtTime(1, audioCtx.currentTime + 0.000)
   await audioCtx.audioWorklet.addModule(`./getPcmProcessor.js?t=${new Date()}`)
-  const getPcmNode = new AudioWorkletNode(audioCtx, "get-pcm-processor")
-  getPcmNode.port.onmessage = (e) => {
+  const getPcm = new AudioWorkletNode(audioCtx, "get-pcm-processor")
+
+  setInterval(() => {
+    analyzer.getByteFrequencyData(analyzerBuffer)
+
+    let sum = 0
+    for (let i = 0; i < analyzerBuffer.length; i++) {
+      sum += analyzerBuffer[i]
+    }
+    const avg = sum / analyzerBuffer.length
+
+    if (avg > Number(MIC_THRESHOLD.value)) {
+      if (isSilent) {
+        gainNode.gain.setValueAtTime(1, audioCtx.currentTime)
+        isSilent = false
+      }
+    } else {
+      if (!isSilent) {
+        gainNode.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.6)
+        isSilent = true
+      }
+    }
+  }, 100)
+  getPcm.port.onmessage = (e) => {
     if (isClosed) return
 
     buffer.push(...Array.from(e.data))
@@ -178,7 +223,11 @@ async function NewConnection() {
   console.log("Media:", media)
   const track = audioCtx.createMediaStreamSource(media)
   console.log("Track:", track)
-  track.connect(getPcmNode)
+  track.
+    connect(analyzer).
+    connect(delay).
+    connect(gainNode).
+    connect(getPcm)
   console.log("Connected track => getPcmNode")
 }
 
@@ -276,7 +325,7 @@ function updateVolume(id) {
   const volumeValue = document.getElementById(`${id}-value`)
   volumeValue.innerText = `(${Math.floor(value * 100).toString().padStart(3, "0")}%)`
 
-  users[id].clientGainNode.gain.value = value * 30
+  users[id].clientGainNode.gain.setValueAtTime(value * 30, audioCtx.currentTime)
   setCookie(id, String(value))
 }
 

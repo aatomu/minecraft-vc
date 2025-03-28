@@ -12,7 +12,14 @@
     <div class="button">
       <label>
         <span id="button-message">Connect to VC</span>
-        <button style="display:none;" id="button"></button>
+        <input id="button" style="display:none;" type="button"></input>
+      </label>
+    </div>
+    <div class="button">
+      <label>
+        <span id="button-message">Mic threshold:</span>
+        <input id="mic-threshold" type="range" min="0" max="100" step="1"></input>
+        <span id="mic-threshold-value" class="volume-value"></span>
       </label>
     </div>
     <span>ステータス:<span id="message"></span></span>

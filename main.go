@@ -340,13 +340,16 @@ func WebSocketResponse(ws *websocket.Conn) {
 				break
 			}
 
+			if !me.isExist {
+				continue
+			}
+
 			for id, user := range server.Users {
-				if (id == meId || !me.isExist) && !isDebug {
-					continue
-				}
 
 				var gain float64 = 0.0
-				if user.Dimension == me.Dimension {
+				if id == meId {
+					gain = 1
+				} else if user.Dimension == me.Dimension {
 					x := (user.Pos[0] - me.Pos[0]) * (user.Pos[0] - me.Pos[0])
 					y := (user.Pos[1] - me.Pos[1]) * (user.Pos[1] - me.Pos[1])
 					z := (user.Pos[2] - me.Pos[2]) * (user.Pos[2] - me.Pos[2])
@@ -383,13 +386,17 @@ func WebSocketResponse(ws *websocket.Conn) {
 			return
 		}
 
-		if len(message)%4 != 0 || len(message)/4 < 10 || (!me.isExist && !isDebug) {
+		if len(message)%4 != 0 || len(message)/4 < 10 {
+			continue
+		}
+
+		if !me.isExist && !isDebug {
 			continue
 		}
 
 		packet := packetBuilder(opPCM, me.Header, message)
 		for id, user := range server.Users {
-			if (id == meId || !user.isExist) && !isDebug {
+			if !user.isExist && !isDebug {
 				continue
 			}
 
