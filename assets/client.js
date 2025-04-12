@@ -198,11 +198,13 @@ async function newConnection() {
     if (avg > Number(MIC_THRESHOLD.value)) {
       if (isSilent) {
         gainNode.gain.setValueAtTime(1, audioCtx.currentTime)
+        MIC_THRESHOLD_VALUE.classList.add("volume-sending")
         isSilent = false
       }
     } else {
       if (!isSilent) {
         gainNode.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.6)
+        MIC_THRESHOLD_VALUE.classList.remove("volume-sending")
         isSilent = true
       }
     }

@@ -108,3 +108,8 @@ body {
   font-size: 90%;
   color: gray;
 }
+
+.volume-sending {
+  color:greenyellow;
+  font-weight: bold;
+}
