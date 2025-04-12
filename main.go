@@ -546,6 +546,9 @@ func newServer(name string, server *Server) {
 				if err != nil {
 					log.Printf("[Rcon/ERROR]: server=\"%s\", message=\"filed connect: %s\"", name, err)
 					server.Retry++
+					if server.Retry > 6 { // 最大試行時間を30sに
+						server.Retry = 6
+					}
 					break
 				}
 				log.Printf("[Rcon/INFO]: server=\"%s\", message=\"connected\"", name)
