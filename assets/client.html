@@ -10,15 +10,17 @@
 
     <h1>Minecraft VC</h1>
     <div class="button">
-      <span>Select Mic</span>
-      <select>
-        <option>None</option>
+      <span>Select Microphone</span>
+      <select id="microphone-selector">
       </select>
-      <span>Mic threshold</span>
-      <input id="mic-threshold" type="range" min="0" max="100" step="1"></input>
+      <span>Send volume threshold</span>
+      <input id="threshold-input" type="range" min="0" max="100" step="1"></input>
       <span>Current/Threshold</span>
+      <span id="current-volume">000</span>/<span id="threshold-value">000</span>
+      <span>Microphone control</span>
+      <span id="microphone-control"> Connect Server</span>
       <span>Status</span>
-      <span id="message">
+      <span id="message"></span>
     </div>
     <div class="users">
       <span class="users-header">プレイヤーリスト</span>

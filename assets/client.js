@@ -1,19 +1,81 @@
 // @ts-check
 ///<reference path="./script.js">
 
-// Global variables
 /** @type {HTMLInputElement} */
 // @ts-expect-error
-const BUTTON = document.getElementById("button")
-let buttonState = 0
-let isMute = false
+const MICROPHONE_SELECTOR = document.getElementById("microphone-selector")
+MICROPHONE_SELECTOR.addEventListener("click", async () => {
+  // Request microphone permission
+  console.log("Request microphone permission")
+  await navigator.mediaDevices.getUserMedia({
+    audio: {
+      autoGainControl: false,
+      echoCancellation: true,
+      noiseSuppression: true,
+      sampleRate: SAMPLE_RATE,
+    }
+  })
+  // Scan audio input devices
+  console.log("Scan audio devices")
+  const devices = await navigator.mediaDevices.enumerateDevices()
+  const input_devices = devices.filter((v) => { return v.kind === "audioinput" })
+
+  console.log("Find audio input devices", input_devices)
+  while (MICROPHONE_SELECTOR.children.length > 0) {
+    MICROPHONE_SELECTOR.children[0].remove()
+  }
+  input_devices.forEach((v) => {
+    const option = document.createElement("option")
+    option.value = v.deviceId
+    option.innerText = v.label
+    MICROPHONE_SELECTOR.append(option)
+  })
+})
+
 /** @type {HTMLInputElement} */
 // @ts-expect-error
-const MIC_THRESHOLD = document.getElementById("mic-threshold")
+const MICROPHONE_CONTROL = document.getElementById("microphone-control")
+let controlPhase = 0
+let isMute = true
+MICROPHONE_CONTROL.addEventListener("click", () => {
+  console.log("Microphone control has clicked, current:", controlPhase)
+  switch (controlPhase) {
+    case 0: {
+      newConnection()
+      isMute = false
+
+      controlPhase = 1
+      MICROPHONE_CONTROL.innerText = "To Mute"
+      break
+    }
+    case 1: {
+      isMute = true
+
+      controlPhase = 2
+      MICROPHONE_CONTROL.innerText = "To Unmute"
+      break
+    }
+    case 2: {
+      isMute = false
+
+      controlPhase = 1
+      MICROPHONE_CONTROL.innerText = "To Mute"
+      break
+    }
+  }
+})
+
+/** @type {HTMLInputElement} */
+// @ts-expect-error
+const THRESHOLD_INPUT = document.getElementById("threshold-input")
 let isSilent = false
 /** @type {HTMLSpanElement} */
 // @ts-expect-error
-const MIC_THRESHOLD_VALUE = document.getElementById("mic-threshold-value")
+const CURRENT_VOLUME = document.getElementById("current-volume")
+/** @type {HTMLSpanElement} */
+// @ts-expect-error
+const THRESHOLD_VALUE = document.getElementById("threshold-value")
+
 /** @type {HTMLDivElement} */
 // @ts-expect-error
 const VOLUME_LIST = document.getElementById("volumes")
@@ -46,53 +108,21 @@ if (!id) {
   updateMessage("Error: required MCID parameter.")
 }
 
-BUTTON.addEventListener("click", clickButton)
-
-function clickButton() {
-  console.log(`Click button: state=${buttonState}`)
-  switch (buttonState) {
-    case 0: {
-      newConnection()
-      isMute = false
-
-      updateButton(false, "Mic to mute", "green")
-      buttonState = 1
-      break
-    }
-    case 1: {
-      isMute = true
-
-      updateButton(false, "Mic to unmute", "red")
-      buttonState = 2
-      break
-    }
-    case 2: {
-      isMute = false
-
-      updateButton(false, "Mic to mute", "green")
-      buttonState = 1
-      break
-    }
-  }
-}
-
-MIC_THRESHOLD.value = getCookie("$threshold") ?? "25"
-updateThreshold(0)
-MIC_THRESHOLD.addEventListener("click", updateThreshold)
-
-function updateThreshold(c) {
-  const current = c ?? 0
-  const threshold = Number(MIC_THRESHOLD.value) ?? 0
-  MIC_THRESHOLD_VALUE.innerText = `(${current.toFixed().padStart(3, "0")}/${threshold.toFixed().padStart(3, "0")})`
+THRESHOLD_INPUT.value = getCookie("$threshold") ?? "25"
+THRESHOLD_INPUT.addEventListener("input", () => {
+  const threshold = Number(THRESHOLD_INPUT.value) ?? 0
+  THRESHOLD_VALUE.innerText = threshold.toFixed().padStart(3, "0")
   setCookie("$threshold", String(threshold))
-}
+})
+THRESHOLD_INPUT.dispatchEvent(new Event("input"))
 
 async function newConnection() {
   // Websocket initialize
-  console.log("Websocket initialize")
+  console.log("Connect to Server(websocket")
   const ws = new WebSocket(`./websocket?server=${server}&id=${id}`)
   ws.binaryType = "arraybuffer"
   let isClosed = false
+
   ws.addEventListener("open", () => {
     console.log("Websocket: open")
     updateMessage("connected to server")
@@ -191,18 +221,18 @@ async function newConnection() {
     analyzer.getByteFrequencyData(analyzerBuffer)
 
     const sum = Math.floor(analyzerBuffer.reduce((sum, current) => sum += current, 0) / 100)
-    updateThreshold(sum)
+    CURRENT_VOLUME.innerText = sum.toFixed().padStart(3, "0")
 
-    if (sum > Number(MIC_THRESHOLD.value)) {
+    if (sum > Number(THRESHOLD_INPUT.value) && !isMute) {
       if (isSilent) {
         gainNode.gain.setValueAtTime(1, audioCtx.currentTime)
-        MIC_THRESHOLD_VALUE.classList.add("volume-sending")
+        THRESHOLD_VALUE.classList.add("volume-sending")
         isSilent = false
       }
     } else {
       if (!isSilent) {
         gainNode.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.6)
-        MIC_THRESHOLD_VALUE.classList.remove("volume-sending")
+        THRESHOLD_VALUE.classList.remove("volume-sending")
         isSilent = true
       }
     }
@@ -216,12 +246,12 @@ async function newConnection() {
   console.log("Get Voice stream")
   const media = await navigator.mediaDevices.getUserMedia({
     audio: {
-      autoGainControl:false,
-      echoCancellation:true,
-      noiseSuppression:true,
+      deviceId: MICROPHONE_SELECTOR.value,
+      autoGainControl: false,
+      echoCancellation: true,
+      noiseSuppression: true,
       sampleRate: SAMPLE_RATE,
-    },
-    video: true,
+    }
   })
   console.log("Media:", media)
   const track = audioCtx.createMediaStreamSource(media)

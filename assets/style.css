@@ -25,7 +25,7 @@ body {
 }
 
 .button {
-  height: 2.5lh;
+  min-height: 2.5lh;
   width: 25em;
 
   background-color: white;
