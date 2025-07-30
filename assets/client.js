@@ -190,7 +190,7 @@ async function newConnection() {
   setInterval(() => {
     analyzer.getByteFrequencyData(analyzerBuffer)
 
-    const sum = Math.floor(analyzerBuffer.reduce((sum,current) => sum += current,0) / 100)
+    const sum = Math.floor(analyzerBuffer.reduce((sum, current) => sum += current, 0) / 100)
     updateThreshold(sum)
 
     if (sum > Number(MIC_THRESHOLD.value)) {
@@ -216,6 +216,9 @@ async function newConnection() {
   console.log("Get Voice stream")
   const media = await navigator.mediaDevices.getUserMedia({
     audio: {
+      autoGainControl:false,
+      echoCancellation:true,
+      noiseSuppression:true,
       sampleRate: SAMPLE_RATE,
     },
     video: true,
