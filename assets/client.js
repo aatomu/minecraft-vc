@@ -77,12 +77,13 @@ function clickButton() {
 }
 
 MIC_THRESHOLD.value = getCookie("$threshold") ?? "25"
-updateThreshold()
+updateThreshold(0)
 MIC_THRESHOLD.addEventListener("click", updateThreshold)
 
-function updateThreshold() {
+function updateThreshold(c) {
+  const current = c ?? 0
   const threshold = Number(MIC_THRESHOLD.value) ?? 0
-  MIC_THRESHOLD_VALUE.innerText = `(${threshold.toString().padStart(3, "0")})`
+  MIC_THRESHOLD_VALUE.innerText = `(${current.toFixed().padStart(3, "0")}/${threshold.toFixed().padStart(3, "0")})`
   setCookie("$threshold", String(threshold))
 }
 
@@ -189,13 +190,10 @@ async function newConnection() {
   setInterval(() => {
     analyzer.getByteFrequencyData(analyzerBuffer)
 
-    let sum = 0
-    for (let i = 0; i < analyzerBuffer.length; i++) {
-      sum += analyzerBuffer[i]
-    }
-    const avg = sum / analyzerBuffer.length
+    const sum = Math.floor(analyzerBuffer.reduce((sum,current) => sum += current,0) / 100)
+    updateThreshold(sum)
 
-    if (avg > Number(MIC_THRESHOLD.value)) {
+    if (sum > Number(MIC_THRESHOLD.value)) {
       if (isSilent) {
         gainNode.gain.setValueAtTime(1, audioCtx.currentTime)
         MIC_THRESHOLD_VALUE.classList.add("volume-sending")
