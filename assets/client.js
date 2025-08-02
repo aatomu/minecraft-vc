@@ -1,6 +1,37 @@
 // @ts-check
-///<reference path="./script.js">
+const REQUEST_URL = new URL(window.location.href)
+const URL_PARAMS = new URLSearchParams(REQUEST_URL.searchParams)
+const API_ENTRY_POINT = REQUEST_URL.origin + "/api"
 
+// MARK: search params
+/** @type {HTMLInputElement} */
+// @ts-expect-error
+const SERVER = document.getElementById("server")
+const PARAMS_SERVER = URL_PARAMS.get("server")
+if (PARAMS_SERVER) {
+  SERVER.value = PARAMS_SERVER
+  setCookie("$server", PARAMS_SERVER)
+} else {
+  SERVER.value = getCookie("$server") ?? ""
+}
+SERVER.addEventListener("input", () => {
+  setCookie("$server", SERVER.value)
+})
+/** @type {HTMLInputElement} */
+// @ts-expect-error
+const MCID = document.getElementById("mcid")
+const PARAMS_MCID = URL_PARAMS.get("mcid")
+if (PARAMS_MCID) {
+  MCID.value = PARAMS_MCID
+  setCookie("$mcid", PARAMS_MCID)
+} else {
+  MCID.value = getCookie("$mcid") ?? ""
+}
+MCID.addEventListener("input", () => {
+  setCookie("$mcid", MCID.value)
+})
+
+// MARK: microphone
 /** @type {HTMLInputElement} */
 // @ts-expect-error
 const MICROPHONE_SELECTOR = document.getElementById("microphone-selector")
@@ -37,11 +68,13 @@ MICROPHONE_SELECTOR.addEventListener("click", async () => {
 const MICROPHONE_CONTROL = document.getElementById("microphone-control")
 let controlPhase = 0
 let isMute = true
-MICROPHONE_CONTROL.addEventListener("click", () => {
+MICROPHONE_CONTROL.addEventListener("click", async () => {
   console.log("Microphone control has clicked, current:", controlPhase)
   switch (controlPhase) {
     case 0: {
-      newConnection()
+      if (!await newConnection()) {
+        return
+      }
       isMute = false
 
       controlPhase = 1
@@ -50,6 +83,7 @@ MICROPHONE_CONTROL.addEventListener("click", () => {
     }
     case 1: {
       isMute = true
+      CURRENT_VOLUME.classList.add("voice-mute")
 
       controlPhase = 2
       MICROPHONE_CONTROL.innerText = "To Unmute"
@@ -57,6 +91,7 @@ MICROPHONE_CONTROL.addEventListener("click", () => {
     }
     case 2: {
       isMute = false
+      CURRENT_VOLUME.classList.remove("voice-mute")
 
       controlPhase = 1
       MICROPHONE_CONTROL.innerText = "To Mute"
@@ -65,6 +100,7 @@ MICROPHONE_CONTROL.addEventListener("click", () => {
   }
 })
 
+// MARK: threshold
 /** @type {HTMLInputElement} */
 // @ts-expect-error
 const THRESHOLD_INPUT = document.getElementById("threshold-input")
@@ -72,10 +108,8 @@ let isSilent = false
 /** @type {HTMLSpanElement} */
 // @ts-expect-error
 const CURRENT_VOLUME = document.getElementById("current-volume")
-/** @type {HTMLSpanElement} */
-// @ts-expect-error
-const THRESHOLD_VALUE = document.getElementById("threshold-value")
 
+// MARK: player list
 /** @type {HTMLDivElement} */
 // @ts-expect-error
 const VOLUME_LIST = document.getElementById("volumes")
@@ -95,31 +129,27 @@ let users = {}
  * @property {Number} schedule
  */
 
-// Websocket initialize
-console.log("Global initialize")
-const server = URL_PARAMS.get("server")
-if (!server) {
-  updateButton(true, "Please reload", "")
-  updateMessage("Error: required server parameter.")
-}
-const id = URL_PARAMS.get("id")
-if (!id) {
-  updateButton(true, "Please reload", "")
-  updateMessage("Error: required MCID parameter.")
-}
-
 THRESHOLD_INPUT.value = getCookie("$threshold") ?? "25"
 THRESHOLD_INPUT.addEventListener("input", () => {
   const threshold = Number(THRESHOLD_INPUT.value) ?? 0
-  THRESHOLD_VALUE.innerText = threshold.toFixed().padStart(3, "0")
   setCookie("$threshold", String(threshold))
 })
 THRESHOLD_INPUT.dispatchEvent(new Event("input"))
 
+// MARK: newConnection()
+/** @return {Promise<boolean>} success */
 async function newConnection() {
+  if (!SERVER.value || !MCID.value || !MICROPHONE_SELECTOR.value) {
+    updateMessage("Server Name/MCID/Microphone is required")
+    return false
+  }
+  SERVER.setAttribute("disabled", "true")
+  MCID.setAttribute("disabled", "true")
+
+  // MARK: new Websocket()
   // Websocket initialize
-  console.log("Connect to Server(websocket")
-  const ws = new WebSocket(`./websocket?server=${server}&id=${id}`)
+  console.log("Connect to Server(websocket)")
+  const ws = new WebSocket(`./websocket?server=${SERVER.value}&id=${MCID.value}`)
   ws.binaryType = "arraybuffer"
   let isClosed = false
 
@@ -127,8 +157,11 @@ async function newConnection() {
     console.log("Websocket: open")
     updateMessage("connected to server")
 
-    setInterval(() => {
-      if (isClosed) return
+    const sender = setInterval(() => {
+      if (isClosed) {
+        clearInterval(sender)
+        return
+      }
 
       if (!isMute) {
         ws.send(new Float32Array(buffer))
@@ -218,26 +251,31 @@ async function newConnection() {
   await audioCtx.audioWorklet.addModule(`./getPcmProcessor.js?t=${new Date()}`)
   const getPcm = new AudioWorkletNode(audioCtx, "get-pcm-processor")
 
-  setInterval(() => {
+  function checker() {
+    if (!isClosed) {
+      requestAnimationFrame(checker)
+    }
     analyzer.getByteFrequencyData(analyzerBuffer)
 
-    const sum = Math.floor(analyzerBuffer.reduce((sum, current) => sum += current, 0) / 100)
-    CURRENT_VOLUME.innerText = sum.toFixed().padStart(3, "0")
+    const sum = analyzerBuffer.reduce((sum, current) => sum += current, 0) / 100
+    CURRENT_VOLUME.style.width = `${sum}%`
 
     if (sum > Number(THRESHOLD_INPUT.value) && !isMute) {
       if (isSilent) {
         gainNode.gain.setValueAtTime(1, audioCtx.currentTime)
-        THRESHOLD_VALUE.classList.add("volume-sending")
+        CURRENT_VOLUME.classList.add("voice-sending")
         isSilent = false
       }
     } else {
       if (!isSilent) {
         gainNode.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.6)
-        THRESHOLD_VALUE.classList.remove("volume-sending")
+        CURRENT_VOLUME.classList.remove("voice-sending")
         isSilent = true
       }
     }
-  }, 100)
+  }
+  requestAnimationFrame(checker)
+
   getPcm.port.onmessage = (e) => {
     if (isClosed) return
 
@@ -400,45 +438,4 @@ function updateMessage(text) {
   const message = document.getElementById("message")
 
   message.innerText = text
-}
-
-/**
- * @param {boolean} isDisable
- * @param {string} text
- * @param {""|"green"|"red"} color
- */
-function updateButton(isDisable, text, color) {
-  if (isDisable) {
-    BUTTON.setAttribute("disabled", "true")
-    BUTTON.classList.add("button-disable")
-  } else {
-    BUTTON.removeAttribute("disabled")
-    BUTTON.classList.remove("button-disable")
-  }
-
-  /** @type {HTMLSpanElement} */
-  // @ts-expect-error
-  const buttonMessage = document.getElementById("button-message")
-  buttonMessage.innerText = text
-
-  switch (color) {
-    case "green": {
-      buttonMessage.classList.add("button-green")
-      buttonMessage.classList.remove("button-red")
-      buttonMessage.classList.remove("button-disable")
-      break
-    }
-    case "red": {
-      buttonMessage.classList.add("button-red")
-      buttonMessage.classList.remove("button-green")
-      buttonMessage.classList.remove("button-disable")
-      break
-    }
-    default: {
-      buttonMessage.classList.remove("button-green")
-      buttonMessage.classList.remove("button-red")
-      buttonMessage.classList.remove("button-disable")
-      break
-    }
-  }
 }

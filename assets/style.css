@@ -24,34 +24,6 @@ body {
   margin-top: 1lh;
 }
 
-.button {
-  min-height: 2.5lh;
-  width: 25em;
-
-  background-color: white;
-  border-radius: 5px;
-  border-width: 2px;
-  border-style: solid;
-
-  display: flex;
-  flex-direction: column;
-  flex-wrap: nowrap;
-  justify-content: center;
-  align-items: center;
-}
-
-.button:has(.button-disable) {
-  opacity: 0.5;
-}
-
-.button:has(.button-green) {
-  border-color: greenyellow;
-}
-
-.button:has(.button-red) {
-  border-color: coral;
-}
-
 .users {
   height: 40vh;
   width: 30em;
@@ -109,7 +81,99 @@ body {
   color: gray;
 }
 
-.volume-sending {
-  color:greenyellow;
-  font-weight: bold;
+.panel {
+  padding: 5px;
+  background-color: white;
+  border-width: 2px;
+  border-color: gray;
+  border-style: solid;
+  border-radius: 5px;
+
+}
+
+.control-panel {
+  display: grid;
+  width: 30ch;
+
+  grid-template:
+    "server server-input" 1.2lh
+    "mcid mcid-input" 1.2lh
+    "microphone ." 1.2lh
+    "microphone-input microphone-input" 1.2lh
+    "threshold threshold" 1.2lh
+    "threshold-container threshold-container" 1.2lh
+    "control control-input" 1.2lh
+    "status ." 1.2lh
+    "status-message status-message" 1.2lh
+    / 2fr 3fr;
+}
+
+.threshold-container {
+  display: block;
+  position: relative;
+  height: 70%;
+
+  overflow: hidden;
+
+  border-width: 2px;
+  border-color: black;
+  border-style: solid;
+  border-radius: 3px;
+}
+
+.threshold-container>* {
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+
+.current-volume {
+  height: 100%;
+  background-color: gray;
+}
+
+.voice-sending {
+  background-color: green;
+}
+
+.voice-mute {
+  background-color: darkred;
+}
+
+.threshold-input {
+  appearance: none;
+
+  margin: 0;
+
+  height: 1.2lh;
+  width: 100%;
+
+  background-color: transparent;
+}
+
+.threshold-input::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+
+  height: 3lh;
+  width: 1lh;
+
+  border-width: 2px;
+  border-color: black;
+  border-style: solid;
+
+  background-color: lightgray;
+}
+
+.threshold-input::-moz-slider-thumb {
+  appearance: none;
+
+  height: 3lh;
+  width: 1lh;
+
+  border-width: 2px;
+  border-color: black;
+  border-style: solid;
+
+  background-color: lightgray;
 }
