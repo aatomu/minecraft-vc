@@ -203,6 +203,7 @@ async function newConnection() {
     isClosed = true
   })
 
+  // MARK: new AudioContext()
   // Audio API initialize
   console.log("Audio API initialize")
   users = {}
@@ -362,6 +363,7 @@ function updateVolume(id) {
   setCookie(id, String(value))
 }
 
+// MARK: cookie
 /**
  * @param {string} key
  * @return {string|undefined}
