@@ -4,12 +4,6 @@
 // Global variables
 /** @type {HTMLInputElement} */
 // @ts-expect-error
-const SERVER = document.getElementById("server")
-/** @type {HTMLInputElement} */
-// @ts-expect-error
-const MCID = document.getElementById("mcid")
-/** @type {HTMLInputElement} */
-// @ts-expect-error
 const BUTTON = document.getElementById("button")
 
 BUTTON.addEventListener("click", clickButton)
