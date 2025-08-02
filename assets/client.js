@@ -245,24 +245,31 @@ async function newConnection() {
   }
 
   console.log("Get Voice stream")
-  const media = await navigator.mediaDevices.getUserMedia({
-    audio: {
-      deviceId: MICROPHONE_SELECTOR.value,
-      autoGainControl: false,
-      echoCancellation: true,
-      noiseSuppression: true,
-      sampleRate: SAMPLE_RATE,
-    }
-  })
-  console.log("Media:", media)
-  const track = audioCtx.createMediaStreamSource(media)
-  console.log("Track:", track)
-  track.
-    connect(analyzer).
-    connect(delay).
-    connect(gainNode).
-    connect(getPcm)
-  console.log("Connected track => getPcmNode")
+  try {
+    const media = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        deviceId: MICROPHONE_SELECTOR.value,
+        autoGainControl: false,
+        echoCancellation: true,
+        noiseSuppression: true,
+        sampleRate: SAMPLE_RATE,
+      }
+    })
+    console.log("Media:", media)
+    const track = audioCtx.createMediaStreamSource(media)
+    console.log("Track:", track)
+    track.
+      connect(analyzer).
+      connect(delay).
+      connect(gainNode).
+      connect(getPcm)
+    console.log("Connected track => getPcmNode")
+  } catch (e) {
+    console.log(e)
+    updateMessage(`Microphone Error(raw:${e}})`)
+    return false
+  }
+  return true
 }
 
 /**
