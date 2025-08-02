@@ -1,38 +1,31 @@
+/* MARK: Global */
 body {
   margin: 0;
   min-height: 100vh;
 
-  background-color: lightgray;
-
   display: flex;
-  flex-direction: column;
-  flex-wrap: nowrap;
   justify-content: center;
-  align-items: center;
+
+  background-color: lightgray;
 }
 
 .container {
+  width: 40ch;
   display: flex;
   flex-direction: column;
   flex-wrap: nowrap;
   justify-content: center;
   align-items: center;
-
 }
 
 .container>* {
   margin-top: 1lh;
 }
 
-.users {
-  height: 40vh;
-  width: 30em;
+.panel {
+  width: 100%;
 
-  display: flex;
-  flex-direction: column;
-  flex-wrap: nowrap;
-  align-items: center;
-
+  padding: 5px;
   background-color: white;
   border-radius: 5px;
   border-color: gray;
@@ -40,60 +33,9 @@ body {
   border-style: solid;
 }
 
-.users-header {
-  font-size: 120%;
-}
-
-.volumes {
-  width: 100%;
-
-  display: flex;
-  flex-direction: column;
-  flex-wrap: nowrap;
-  justify-content: flex-start;
-  align-items: center;
-
-  overflow-y: auto;
-}
-
-.volumes>* {
-  margin-top: 0.1lh;
-}
-
-.volume-group {
-  display: flex;
-  flex-direction: row;
-  flex-wrap: nowrap;
-  align-items: center;
-}
-
-.volume-input {
-  height: 0.3rem;
-
-  background-color: lightgrey;
-  border-radius: 0.15rem;
-
-  appearance: none;
-}
-
-.volume-value {
-  font-size: 90%;
-  color: gray;
-}
-
-.panel {
-  padding: 5px;
-  background-color: white;
-  border-width: 2px;
-  border-color: gray;
-  border-style: solid;
-  border-radius: 5px;
-
-}
-
+/* MARK: Control panel */
 .control-panel {
   display: grid;
-  width: 30ch;
 
   grid-template:
     "server server-input" 1.2lh
@@ -176,4 +118,55 @@ body {
   border-style: solid;
 
   background-color: lightgray;
+}
+
+/* MARK: Player list */
+.users {
+  height: 40vh;
+
+  display: flex;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: center;
+}
+
+.users-header {
+  font-size: 120%;
+}
+
+.volumes {
+  width: 100%;
+
+  display: flex;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  justify-content: flex-start;
+  align-items: center;
+
+  overflow-y: auto;
+}
+
+.volumes>* {
+  margin-top: 0.1lh;
+}
+
+.volume-group {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+}
+
+.volume-input {
+  height: 0.3rem;
+
+  background-color: lightgrey;
+  border-radius: 0.15rem;
+
+  appearance: none;
+}
+
+.volume-value {
+  font-size: 90%;
+  color: gray;
 }

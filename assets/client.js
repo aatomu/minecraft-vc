@@ -111,7 +111,7 @@ const CURRENT_VOLUME = document.getElementById("current-volume")
 // MARK: player list
 /** @type {HTMLDivElement} */
 // @ts-expect-error
-const VOLUME_LIST = document.getElementById("volumes")
+const PLAYER_LIST = document.getElementById("player-list")
 /** @type {AudioContext} */
 // @ts-expect-error
 let audioCtx = undefined
@@ -193,7 +193,7 @@ async function newConnection() {
       users[id].serverGainNode.connect(users[id].clientGainNode)
       users[id].clientGainNode.connect(audioCtx.destination)
 
-      newVolume(id)
+      newPlayer(id)
     }
 
     switch (opCode) {
@@ -309,33 +309,11 @@ async function newConnection() {
   return true
 }
 
-/**
- * @param {string} id
- * @param {Float32Array} pcm
- */
-function playAudioStream(id, pcm) {
-  const buffer = audioCtx.createBuffer(1, pcm.length, SAMPLE_RATE)
-  const source = audioCtx.createBufferSource()
-  const currentTime = audioCtx.currentTime;
-
-  buffer.getChannelData(0).set(pcm);
-
-  source.buffer = buffer;
-  source.connect(users[id].serverGainNode);
-
-  if (currentTime < users[id].schedule) {
-    source.start(users[id].schedule)
-    users[id].schedule += buffer.duration;
-  } else {
-    source.start(users[id].schedule)
-    users[id].schedule = currentTime + buffer.duration;
-  }
-}
-
+// MARK: New Player
 /**
  * @param {string} id
  */
-function newVolume(id) {
+function newPlayer(id) {
   const group = document.createElement("div")
   group.id = `${id}-group`
   group.classList.add("volume-group")
@@ -361,25 +339,21 @@ function newVolume(id) {
   volumeValue.innerText = `(100%)`
   group.append(volumeValue)
 
-  if (VOLUME_LIST.children.length > 0) {
-    let isPlaced = false
-    for (let i = 0; i < VOLUME_LIST.children.length; i++) {
-      /** @type {HTMLSpanElement} */
-      //@ts-expect-error
-      const childrenName = VOLUME_LIST.children[i].querySelector(".volume-name")
-      VOLUME_LIST.children[0].querySelector(".volume-name")
+  let isPlaced = false
+  for (let i = 0; i < PLAYER_LIST.children.length; i++) {
+    /** @type {HTMLSpanElement} */
+    //@ts-expect-error
+    const childrenName = PLAYER_LIST.children[i].querySelector(".volume-name")
+    PLAYER_LIST.children[0].querySelector(".volume-name")
 
-      if (id.localeCompare(childrenName.innerText) < 0) {
-        VOLUME_LIST.children[i].before(group)
-        isPlaced = true
-        break
-      }
+    if (id.localeCompare(childrenName.innerText) < 0) {
+      PLAYER_LIST.children[i].before(group)
+      isPlaced = true
+      break
     }
-    if (!isPlaced) {
-      VOLUME_LIST.append(group)
-    }
-  } else {
-    VOLUME_LIST.append(group)
+  }
+  if (!isPlaced) {
+    PLAYER_LIST.append(group)
   }
 
   volume.addEventListener("input", () => {
@@ -391,6 +365,29 @@ function newVolume(id) {
     volume.value = value
   }
   updateVolume(id)
+}
+
+/**
+ * @param {string} id
+ * @param {Float32Array} pcm
+ */
+function playAudioStream(id, pcm) {
+  const buffer = audioCtx.createBuffer(1, pcm.length, SAMPLE_RATE)
+  const source = audioCtx.createBufferSource()
+  const currentTime = audioCtx.currentTime;
+
+  buffer.getChannelData(0).set(pcm);
+
+  source.buffer = buffer;
+  source.connect(users[id].serverGainNode);
+
+  if (currentTime < users[id].schedule) {
+    source.start(users[id].schedule)
+    users[id].schedule += buffer.duration;
+  } else {
+    source.start(users[id].schedule)
+    users[id].schedule = currentTime + buffer.duration;
+  }
 }
 
 function updateVolume(id) {

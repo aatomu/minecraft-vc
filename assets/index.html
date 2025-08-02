@@ -9,33 +9,32 @@
   <div class="container">
     <h1>Minecraft VC</h1>
     <div class="panel control-panel">
-      <span style="grid-area: server;">Server</span>
+      <span style="grid-area: server;">Server:</span>
       <input style="grid-area: server-input;" type="text" placeholder="example" id="server">
-      <span style="grid-area:mcid;">MCID</span>
-      <input style="grid-area: mcid-input;" type="text" placeholder="Herobrine"  id="mcid">
-      <span style="grid-area :microphone;">Select Microphone</span>
+      <span style="grid-area:mcid;">MCID:</span>
+      <input style="grid-area: mcid-input;" type="text" placeholder="Herobrine" id="mcid">
+      <span style="grid-area :microphone;">Select Microphone:</span>
       <select style="grid-area: microphone-input;" id="microphone-selector" style="display: block;">
         <optgroup label=""></optgroup>
       </select>
-      <span style="grid-area: threshold;">Send voice threshold</span>
+      <span style="grid-area: threshold;">Send voice threshold:</span>
       <div class="threshold-container" style="grid-area:threshold-container;">
         <div class="current-volume" id="current-volume">
         </div>
         <input class="threshold-input" id="threshold-input" type="range" min="0" max="100" step="1"></input>
       </div>
-      <span style="grid-area: control;">Mic control</span>
-      <button style="grid-area: control-input;" id="microphone-control"> Connect Server</button>
-      <span style="grid-area:status;">Status</span>
+      <span style="grid-area: control;">Mic control:</span>
+      <button style="grid-area: control-input;" id="microphone-control">Connect Server</button>
+      <span style="grid-area:status;">Status:</span>
       <span style="grid-area:status-message;" id="message"></span>
     </div>
-    <div class="users">
-      <span class="users-header">プレイヤーリスト</span>
-      <div id="volumes" class="volumes">
+    <div class="panel users">
+      <span class="users-header">Player List:</span>
+      <div id="player-list" class="player-list">
       </div>
     </div>
   </div>
 </body>
 
-<!-- <script src="./script.js"></script> -->
 <script src="./client.js"></script>
 <script src="./server.js"></script>
