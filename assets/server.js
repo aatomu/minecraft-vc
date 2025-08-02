@@ -1,5 +1,5 @@
 // @ts-check
-///<reference path="./script.js">
+const API_ENTRY_POINT = new URL(window.location.href).origin + "/api"
 
 /**
  * @typedef Server
